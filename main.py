@@ -7,40 +7,41 @@ from streamlit_lottie import st_lottie
 from utils.ai_brain import predict_disease
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Leaf Disease Detection", page_icon="🌿", layout="wide")
+st.set_page_config(page_title="AgroScan AI", page_icon="🌿", layout="wide")
 
-# ==========================================
-# 🛠️ SYSTEM DIAGNOSTICS (DEBUGGING TOOL)
-# This will show us EXACTLY where the files are on the cloud
-# ==========================================
-with st.expander("🕵️‍♂️ CLICK HERE TO SEE SERVER FILES (Debug Menu)", expanded=True):
-    st.write("📂 **Files in Main Folder (Root):**")
-    try:
-        files = os.listdir('.')
-        st.code(files)
-        
-        # Check specifically for the model
-        if "plant_disease_model.h5" in files:
-            st.success("✅ FOUND: 'plant_disease_model.h5' is in the Main Folder!")
-        else:
-            st.error("❌ MISSING: 'plant_disease_model.h5' is NOT in the Main Folder.")
-            
-    except Exception as e:
-        st.error(f"Error reading root: {e}")
+# --- CUSTOM CSS FOR CARDS ---
+st.markdown("""
+<style>
+    .stButton>button {
+        width: 100%;
+        border-radius: 5px;
+        height: 3em;
+        background-color: #2b2b2b;
+        color: white;
+        border: 1px solid #4CAF50;
+    }
+    .stButton>button:hover {
+        background-color: #4CAF50;
+        color: white;
+        border-color: #45a049;
+    }
+    div[data-testid="stVerticalBlock"] > div {
+        background-color: #1E1E1E;
+        border-radius: 10px;
+        padding: 10px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-    st.write("📂 **Files in 'models' Folder:**")
-    if os.path.exists('models'):
-        try:
-            model_files = os.listdir('models')
-            st.code(model_files)
-            if "plant_disease_model.h5" in model_files:
-                st.success("✅ FOUND: 'plant_disease_model.h5' is in the 'models' folder!")
-        except Exception as e:
-            st.error(f"Error reading models folder: {e}")
-    else:
-        st.warning("⚠️ The 'models' folder does not exist on this server.")
+# --- SESSION STATE MANAGEMENT ---
+if 'page' not in st.session_state:
+    st.session_state.page = 'home'
+if 'selected_crop' not in st.session_state:
+    st.session_state.selected_crop = None
 
-# ==========================================
+def navigate_to(page, crop=None):
+    st.session_state.page = page
+    st.session_state.selected_crop = crop
 
 # --- ASSETS & ANIMATIONS ---
 def load_lottieurl(url: str):
@@ -53,15 +54,6 @@ def load_lottieurl(url: str):
         return None
 
 lottie_brain = load_lottieurl("https://lottie.host/60630956-e216-4298-905d-2a3543500410/3t49238088.json")
-
-def load_css(file_name):
-    try:
-        with open(file_name) as f:
-            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
-    except:
-        pass
-
-load_css("assets/dark.css")
 
 # --- EMBEDDED DATABASE ---
 KNOWLEDGE_BASE = {
@@ -112,7 +104,127 @@ KNOWLEDGE_BASE = {
     }
 }
 
-# --- SIDEBAR ---
+# --- PAGE 1: HOME (SELECTION SCREEN) ---
+if st.session_state.page == 'home':
+    st.title("🌿 AgroScan AI")
+    st.subheader("① Select Your Plant System")
+    st.write("Choose a crop below to initialize the specific diagnostic model.")
+    st.write("") # Spacer
+
+    col1, col2, col3 = st.columns(3)
+
+    # --- CARD 1: APPLE ---
+    with col1:
+        with st.container(border=True):
+            st.markdown("<h1 style='text-align: center;'>🍎</h1>", unsafe_allow_html=True)
+            st.markdown("<h3 style='text-align: center;'>Apple</h3>", unsafe_allow_html=True)
+            st.write("Detects: Scab, Black Rot, Rust")
+            if st.button("Select Apple Model"):
+                navigate_to('predict', 'Apple')
+
+    # --- CARD 2: CORN ---
+    with col2:
+        with st.container(border=True):
+            st.markdown("<h1 style='text-align: center;'>🌽</h1>", unsafe_allow_html=True)
+            st.markdown("<h3 style='text-align: center;'>Corn (Maize)</h3>", unsafe_allow_html=True)
+            st.write("Detects: Blight, Rust, Gray Leaf")
+            if st.button("Select Corn Model"):
+                navigate_to('predict', 'Corn')
+
+    # --- CARD 3: POTATO ---
+    with col3:
+        with st.container(border=True):
+            st.markdown("<h1 style='text-align: center;'>🥔</h1>", unsafe_allow_html=True)
+            st.markdown("<h3 style='text-align: center;'>Potato</h3>", unsafe_allow_html=True)
+            st.write("Detects: Early Blight, Late Blight")
+            if st.button("Select Potato Model"):
+                navigate_to('predict', 'Potato')
+    
+    st.markdown("---")
+    st.caption("🚀 More crops (Tomato, Grape, Cotton) coming in v3.0 update...")
+
+
+# --- PAGE 2: PREDICTION (ANALYSIS SCREEN) ---
+elif st.session_state.page == 'predict':
+    
+    # Back Button Logic
+    col_back, col_title = st.columns([1, 8])
+    with col_back:
+        if st.button("← Back"):
+            navigate_to('home')
+    
+    with col_title:
+        st.title(f"{st.session_state.selected_crop} Disease Detection")
+
+    st.markdown(f"Upload a **{st.session_state.selected_crop}** leaf image. The AI will analyze the cellular patterns.")
+    
+    uploaded_file = st.file_uploader("", type=["jpg", "png", "jpeg"])
+
+    if uploaded_file is not None:
+        col1, col2 = st.columns([1, 1])
+        
+        image = Image.open(uploaded_file)
+        with col1:
+            st.image(image, caption="Specimen", use_container_width=True)
+        
+        if st.button("Analyze Specimen"):
+            with col2:
+                # Animation
+                anim_placeholder = st.empty()
+                with anim_placeholder.container():
+                    c1, c2 = st.columns([1,3])
+                    with c1:
+                        if lottie_brain:
+                            st_lottie(lottie_brain, height=100, key="brain")
+                        else:
+                            st.spinner("Thinking...")
+                    with c2:
+                        st.write("Extracting features...")
+                        time.sleep(0.5)
+                        st.write("Matching patterns...")
+                        time.sleep(0.5)
+                
+                anim_placeholder.empty()
+
+                # --- THE AI PREDICTION ---
+                result = predict_disease(image)
+                
+                if "error" in result:
+                    st.error("❌ Model Error: " + result["error"])
+                else:
+                    disease_key = result["class"] # e.g., "apple_black_rot"
+                    confidence = result["confidence"]
+                    
+                    # --- SMART MATCHING LOGIC ---
+                    clean_name = disease_key.replace("_", " ").lower()
+                    
+                    found_info = None
+                    
+                    # Scan database keys to find a match
+                    for db_key in KNOWLEDGE_BASE:
+                        if clean_name in db_key.lower():
+                            found_info = KNOWLEDGE_BASE[db_key]
+                            break
+                    
+                    if found_info:
+                        st.toast("Identification Complete", icon="🧬")
+                        st.markdown(f"""
+                        <div style="background-color: #2b2b2b; padding: 20px; border-radius: 10px; border-left: 5px solid #00b894;">
+                            <h2 style="color: #00b894; margin:0;">{found_info['disease_name']}</h2>
+                            <p style="color: #ccc; margin-top:5px;">AI Confidence: <strong>{confidence}</strong></p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        st.write("")
+                        st.markdown(f"**🔬 Description:** {found_info['description']}")
+                        st.markdown(f"**💊 Treatment:** {found_info['treatment']}")
+                    else:
+                        # Fallback if AI predicts a class we don't have text for
+                        st.warning(f"AI Detected: **{disease_key}**")
+                        st.caption(f"Confidence: {confidence}")
+                        st.info("No detailed description found in database for this specific disease.")
+
+# --- SIDEBAR (Always Visible) ---
 with st.sidebar:
     try:
         st.image("assets/logo.png", use_container_width=True)
@@ -125,77 +237,7 @@ with st.sidebar:
     st.caption("Training Accuracy: 99.1%")
     
     st.markdown("---")
-    st.info("This version uses Deep Learning (CNN) to analyze leaf patterns in real-time.")
-
-# --- MAIN APP ---
-st.title("🌿 Leaf Disease Detection")
-st.markdown("Upload a leaf image. The AI will analyze the cellular patterns to detect disease.")
-
-uploaded_file = st.file_uploader("", type=["jpg", "png", "jpeg"])
-
-if uploaded_file is not None:
-    col1, col2 = st.columns([1, 1])
-    
-    image = Image.open(uploaded_file)
-    with col1:
-        st.image(image, caption="Specimen", use_container_width=True)
-    
-    if st.button("Analyze Specimen"):
-        with col2:
-            # Animation
-            anim_placeholder = st.empty()
-            with anim_placeholder.container():
-                c1, c2 = st.columns([1,3])
-                with c1:
-                    if lottie_brain:
-                        st_lottie(lottie_brain, height=100, key="brain")
-                    else:
-                        st.spinner("Thinking...")
-                with c2:
-                    st.write("Extracting features...")
-                    time.sleep(0.5)
-                    st.write("Matching patterns...")
-                    time.sleep(0.5)
-            
-            anim_placeholder.empty()
-
-            # --- THE AI PREDICTION ---
-            result = predict_disease(image)
-            
-            if "error" in result:
-                st.error("❌ Model Error: " + result["error"])
-                st.warning("Please check the 'Debug Menu' at the top to see if your file is missing.")
-            else:
-                disease_key = result["class"] # e.g., "apple_black_rot"
-                confidence = result["confidence"]
-                
-                # --- SMART MATCHING LOGIC ---
-                # 1. Replace underscores with spaces (apple_black_rot -> apple black rot)
-                # 2. Convert to lowercase to ensure a perfect match
-                clean_name = disease_key.replace("_", " ").lower()
-                
-                found_info = None
-                
-                # Scan database keys to find a match
-                for db_key in KNOWLEDGE_BASE:
-                    if clean_name in db_key.lower():
-                        found_info = KNOWLEDGE_BASE[db_key]
-                        break
-                
-                if found_info:
-                    st.toast("Identification Complete", icon="🧬")
-                    st.markdown(f"""
-                    <div style="background-color: #2b2b2b; padding: 20px; border-radius: 10px; border-left: 5px solid #00b894;">
-                        <h2 style="color: #00b894; margin:0;">{found_info['disease_name']}</h2>
-                        <p style="color: #ccc; margin-top:5px;">AI Confidence: <strong>{confidence}</strong></p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    st.write("")
-                    st.markdown(f"**🔬 Description:** {found_info['description']}")
-                    st.markdown(f"**💊 Treatment:** {found_info['treatment']}")
-                else:
-                    # Fallback if AI predicts a class we don't have text for
-                    st.warning(f"AI Detected: **{disease_key}**")
-                    st.caption(f"Confidence: {confidence}")
-                    st.info("No detailed description found in database for this specific disease.")
+    if st.session_state.page == 'home':
+        st.info("Select a crop system to begin diagnostics.")
+    else:
+        st.info(f"Currently analyzing: **{st.session_state.selected_crop}**")
