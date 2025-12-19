@@ -7,8 +7,7 @@ from streamlit_lottie import st_lottie
 from utils.ai_brain import predict_disease
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="AgroScan AI", page_icon="🧠", layout="wide")
-
+st.set_page_config(page_title="Leaf Disease Detection", page_icon="🌿", layout="wide")
 # --- ASSETS & ANIMATIONS ---
 def load_lottieurl(url: str):
     try:
@@ -57,7 +56,7 @@ with st.sidebar:
     st.info("This version uses Deep Learning (CNN) to analyze leaf patterns in real-time.")
 
 # --- MAIN APP ---
-st.title("🌿 AgroScan AI: Neural Diagnostic")
+st.title("🌿 Leaf Disease Detection")
 st.markdown("Upload a leaf image. The AI will analyze the cellular patterns to detect disease.")
 
 uploaded_file = st.file_uploader("", type=["jpg", "png", "jpeg"])
