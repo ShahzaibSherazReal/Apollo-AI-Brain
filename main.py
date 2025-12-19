@@ -8,59 +8,79 @@ import numpy as np
 from streamlit_lottie import st_lottie
 from utils.ai_brain import predict_disease
 
-# --- CONFIGURATION ---
+# --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Leaf Disease Detection", page_icon="🌿", layout="wide")
 
-# --- CUSTOM CSS ---
-st.markdown("""
+# --- 2. SESSION STATE & THEME INITIALIZATION ---
+if 'dark_mode' not in st.session_state:
+    st.session_state.dark_mode = True  # Default to Dark Mode
+if 'page' not in st.session_state: 
+    st.session_state.page = 'home'
+if 'selected_crop' not in st.session_state: 
+    st.session_state.selected_crop = None
+
+# Set Dynamic Colors based on Toggle
+if st.session_state.dark_mode:
+    app_bg = "#000000"
+    sidebar_bg = "#000000"
+    card_bg = "#121212"
+    text_col = "#E0E0E0"
+    border_col = "#333333"
+    btn_bg = "#2b2b2b"
+else:
+    app_bg = "#FFFFFF"
+    sidebar_bg = "#F8F9FA"
+    card_bg = "#F0F2F6"
+    text_col = "#000000"
+    border_col = "#DDDDDD"
+    btn_bg = "#E0E0E0"
+
+# --- 3. CUSTOM CSS (DYNAMIC) ---
+st.markdown(f"""
 <style>
     /* MAIN THEME */
-    .stApp { background-color: #000000; }
-    section[data-testid="stSidebar"] { background-color: #000000; }
+    .stApp {{ background-color: {app_bg}; }}
+    section[data-testid="stSidebar"] {{ background-color: {sidebar_bg}; }}
     
     /* BUTTONS */
-    .stButton>button {
+    .stButton>button {{
         width: 100%;
         border-radius: 5px;
         height: 3em;
-        background-color: #2b2b2b;
-        color: white;
+        background-color: {btn_bg};
+        color: {text_col};
         border: 1px solid #4CAF50;
         transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
+    }}
+    .stButton>button:hover {{
         background-color: #4CAF50;
         color: white;
         border-color: #45a049;
-    }
+    }}
 
     /* CARDS */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #121212;
-        border: 1px solid #333;
+    div[data-testid="stVerticalBlockBorderWrapper"] {{
+        background-color: {card_bg};
+        border: 1px solid {border_col};
         border-radius: 10px;
         padding: 10px;
-    }
+    }}
     
-    /* TEXT */
-    h1, h2, h3, h4, h5, h6, p, div, span, li, label {
-        color: #E0E0E0 !important;
-    }
+    /* TEXT FORCE COLOR */
+    h1, h2, h3, h4, h5, h6, p, div, span, li, label {{
+        color: {text_col} !important;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
-# --- SESSION STATE ---
-if 'page' not in st.session_state: st.session_state.page = 'home'
-if 'selected_crop' not in st.session_state: st.session_state.selected_crop = None
-
+# --- 4. NAVIGATION LOGIC ---
 def navigate_to(page, crop=None):
     st.session_state.page = page
     st.session_state.selected_crop = crop
 
-# --- ASSETS ---
+# --- 5. ASSETS & DATABASE ---
 lottie_brain = "https://lottie.host/60630956-e216-4298-905d-2a3543500410/3t49238088.json"
 
-# --- DATABASE ---
 KNOWLEDGE_BASE = {
     "Apple Black Rot": { "disease_name": "Apple Black Rot", "description": "Fungal disease causing purple spots and rotting fruit.", "treatment": "Prune dead branches, use Captan or Sulfur." },
     "Apple Healthy": { "disease_name": "Healthy Apple Leaf", "description": "Vibrant green leaves, no lesions.", "treatment": "Regular water/fertilizer." },
@@ -73,87 +93,57 @@ KNOWLEDGE_BASE = {
     "Potato Late Blight": { "disease_name": "Potato Late Blight", "description": "Water-soaked spots turning black (Irish Famine disease).", "treatment": "Remove infected plants immediately, preventative fungicide." }
 }
 
-# --- 🛰️ SCI-FI SCANNING ANIMATION FUNCTION ---
+# --- 6. ANIMATION FUNCTION ---
 def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
-    """
-    Creates a visual effect of scanning the leaf with lasers, grids, and metrics.
-    """
-    # 1. Setup Image
     img = original_img.copy().convert("RGBA")
     width, height = img.size
-    
-    # Resize for performance if too huge
     if width > 500:
         ratio = 500 / width
         img = img.resize((500, int(height * ratio)))
         width, height = img.size
-
-    step_size = int(height / 10) # 10 frames of scanning
+    step_size = int(height / 10) 
     
-    # 2. The Animation Loop
     for i in range(0, height + step_size, step_size):
-        # Create a fresh frame based on original
         frame = img.copy()
         draw = ImageDraw.Draw(frame)
-        
-        # A. The Laser Line (Moving Down)
         scan_y = i if i < height else height - 1
         draw.line([(0, scan_y), (width, scan_y)], fill=(0, 255, 0, 200), width=5)
-        
-        # B. The "Grid" Overlay (Fades in)
         for x_grid in range(0, width, 50):
             draw.line([(x_grid, 0), (x_grid, height)], fill=(0, 255, 0, 50), width=1)
         for y_grid in range(0, height, 50):
             draw.line([(0, y_grid), (width, y_grid)], fill=(0, 255, 0, 50), width=1)
-
-        # C. Random "Target Locks" (Crosshairs)
         for _ in range(3):
             rx, ry = random.randint(20, width-20), random.randint(20, height-20)
             length = 10
-            # Draw Cross
             draw.line([(rx-length, ry), (rx+length, ry)], fill=(255, 0, 0, 255), width=2)
             draw.line([(rx, ry-length), (rx, ry+length)], fill=(255, 0, 0, 255), width=2)
-            # Draw Box
             draw.rectangle([rx-15, ry-15, rx+15, ry+15], outline=(255, 0, 0, 150), width=1)
-
-        # D. Update Image on Screen
         image_placeholder.image(frame, caption="🔍 SCANNING CELLULAR STRUCTURE...", use_container_width=True)
-        
-        # E. Update Graphs (The "Heavy Calculation" look)
         with graph_placeholder.container():
             g1, g2 = st.columns(2)
-            # Random "Biometrics" data
             chart_data = [random.randint(10, 100) for _ in range(20)]
             g1.line_chart(chart_data, height=100)
-            g1.caption(f"Chlorophyll Levels: {random.randint(400, 800)} nm")
-            
-            # Random "Confidence" bars
             g2.progress(min(i / height, 1.0))
-            g2.caption("Analyzing Texture Patterns...")
-            
-        time.sleep(0.15) # Control speed of scan
+        time.sleep(0.15)
 
-# --- PAGE 1: HOME ---
+# --- 7. PAGE 1: HOME ---
 if st.session_state.page == 'home':
     st.title("🌿 Leaf Disease Detection")
     st.subheader("① Select Your Plant System")
     
     col1, col2, col3 = st.columns(3)
-
     with col1:
         with st.container(border=True):
             st.markdown("<h1 style='text-align: center;'>🍎</h1>", unsafe_allow_html=True)
             st.markdown("<h3 style='text-align: center;'>Apple</h3>", unsafe_allow_html=True)
             st.write("Detects: Scab, Rot, Healthy")
             if st.button("Select Apple Model"): navigate_to('predict', 'Apple')
-
     with col2:
         with st.container(border=True):
             st.markdown("<h1 style='text-align: center;'>🌽</h1>", unsafe_allow_html=True)
             st.markdown("<h3 style='text-align: center;'>Corn (Maize)</h3>", unsafe_allow_html=True)
             st.write("Detects: Blight, Rust, Healthy")
             if st.button("Select Corn Model"): navigate_to('predict', 'Corn')
-
     with col3:
         with st.container(border=True):
             st.markdown("<h1 style='text-align: center;'>🥔</h1>", unsafe_allow_html=True)
@@ -164,43 +154,28 @@ if st.session_state.page == 'home':
     st.markdown("---")
     st.caption("🚀 v3.0 Update: Tomato & Cotton coming soon.")
 
-# --- PAGE 2: PREDICTION ---
+# --- 8. PAGE 2: PREDICTION ---
 elif st.session_state.page == 'predict':
-    
     col_back, col_title = st.columns([1, 8])
     with col_back:
         if st.button("← Back"): navigate_to('home')
-    
     with col_title:
         st.title(f"{st.session_state.selected_crop} Diagnostics")
 
     uploaded_file = st.file_uploader(f"Upload {st.session_state.selected_crop} Leaf", type=["jpg", "png", "jpeg"])
-
     if uploaded_file is not None:
-        # Layout: Left for Image/Scan, Right for Results/Graphs
         col1, col2 = st.columns([1, 1])
-        
         image = Image.open(uploaded_file)
-        
-        # Placeholders must be created OUTSIDE the button to persist
         with col1:
             scan_placeholder = st.empty()
-            # Show original static image first
             scan_placeholder.image(image, caption="Original Specimen", use_container_width=True)
-        
         with col2:
-            graph_placeholder = st.empty() # For the "Heavy Duty" graphs
-            results_placeholder = st.empty() # For the final answer
+            graph_placeholder = st.empty()
+            results_placeholder = st.empty()
 
-        # BUTTON LOGIC
         if st.button("INITIATE DEEP SCAN"):
-            # 1. RUN THE ANIMATION
             heavy_duty_scan(scan_placeholder, graph_placeholder, image)
-            
-            # 2. CLEAR GRAPHS (Optional: or keep them as "History")
             graph_placeholder.empty()
-            
-            # 3. SHOW RESULTS
             result = predict_disease(image)
             
             if "error" in result:
@@ -209,32 +184,40 @@ elif st.session_state.page == 'predict':
                 disease_key = result["class"]
                 confidence = result["confidence"]
                 clean_name = disease_key.replace("_", " ").lower()
-                found_info = None
-                
-                for db_key in KNOWLEDGE_BASE:
-                    if clean_name in db_key.lower():
-                        found_info = KNOWLEDGE_BASE[db_key]
-                        break
+                found_info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
                 
                 with results_placeholder.container():
                     if found_info:
                         st.toast("Scan Complete. Match Found.", icon="✅")
                         st.markdown(f"""
-                        <div style="background-color: #1E1E1E; padding: 20px; border-radius: 10px; border: 1px solid #4CAF50; box-shadow: 0 0 15px rgba(76, 175, 80, 0.3);">
-                            <h2 style="color: #4CAF50 !important; margin:0;">{found_info['disease_name']}</h2>
-                            <h4 style="color: #bbb !important;">Confidence: <span style="color:#fff">{confidence}</span></h4>
-                            <hr style="border-color: #333;">
-                            <p style="color: #ddd !important;"><strong>🔬 Diagnosis:</strong> {found_info['description']}</p>
-                            <p style="color: #ddd !important;"><strong>💊 Recommended Action:</strong> {found_info['treatment']}</p>
+                        <div style="background-color: {card_bg}; padding: 20px; border-radius: 10px; border: 1px solid #4CAF50;">
+                            <h2 style="color: #4CAF50 !important;">{found_info['disease_name']}</h2>
+                            <h4 style="color: {text_col} !important;">Confidence: {confidence}</h4>
+                            <hr style="border-color: {border_col};">
+                            <p><strong>🔬 Diagnosis:</strong> {found_info['description']}</p>
+                            <p><strong>💊 Recommended Action:</strong> {found_info['treatment']}</p>
                         </div>
                         """, unsafe_allow_html=True)
                     else:
                         st.warning(f"AI Detected: {disease_key}")
-                        st.info("Database entry missing for this specific variant.")
 
-# --- SIDEBAR ---
+# --- 9. SIDEBAR (SETTINGS & STATUS) ---
 with st.sidebar:
-    st.title("AgroScan AI")
+    st.title("Leaf Disease Detection")
+    st.markdown("---")
+    
+    # Light/Dark Toggle Logic
+    st.subheader("Settings")
+    toggle_label = "🌙 Dark Mode Active" if st.session_state.dark_mode else "☀️ Light Mode Active"
+    if st.toggle(toggle_label, value=st.session_state.dark_mode):
+        if not st.session_state.dark_mode:
+            st.session_state.dark_mode = True
+            st.rerun()
+    else:
+        if st.session_state.dark_mode:
+            st.session_state.dark_mode = False
+            st.rerun()
+
     st.markdown("---")
     st.subheader("System Status")
     st.success("🟢 Neural Engine Online")
