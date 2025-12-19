@@ -1,9 +1,9 @@
 import tensorflow as tf
 import numpy as np
 from PIL import Image
+import os
 
 # --- CONFIGURATION ---
-# These names match your Colab training data exactly (lowercase)
 CLASS_NAMES = [
     'apple_black_rot',
     'apple_healthy',
@@ -16,22 +16,25 @@ CLASS_NAMES = [
     'potato_late_blight'
 ]
 
-MODEL_PATH = "models/plant_disease_model.h5"
+# UPDATED PATH: We are looking for the file in the SAME directory as the app
+# This removes the "models/" folder complexity
+MODEL_PATH = "plant_disease_model.h5"
 
-# Global variable to store the model so we don't reload it every single time
 _model = None
 
 def load_prediction_model():
-    """
-    Loads the trained model from the file.
-    Uses a global variable to cache the model for speed.
-    """
     global _model
     if _model is not None:
         return _model
 
+    # Debugging: Print where we are looking
+    print(f"🔍 Looking for model at: {os.path.abspath(MODEL_PATH)}")
+
+    if not os.path.exists(MODEL_PATH):
+        print("❌ CRITICAL ERROR: The file is not on the server!")
+        return None
+
     try:
-        # Load the model (this can take 1-2 seconds the first time)
         _model = tf.keras.models.load_model(MODEL_PATH)
         print("✅ Model loaded successfully.")
         return _model
@@ -40,43 +43,27 @@ def load_prediction_model():
         return None
 
 def predict_disease(image_file):
-    """
-    1. Receives the image (PIL format)
-    2. Prepares it (Resize 224x224)
-    3. Asks the Brain (Model) what it sees
-    """
     model = load_prediction_model()
     
     if model is None:
-        return {"error": "Model file not found. Did you download the .h5 file?"}
+        # This error will now show exactly what went wrong
+        return {"error": f"File '{MODEL_PATH}' not found on Cloud. Did you upload it to the main folder?"}
 
-    # 1. Prepare Image
-    # Resize to 224x224 (The exact size MobileNetV2 expects)
     target_size = (224, 224)
     image = image_file.resize(target_size)
-    
-    # Convert image to a list of numbers (Array)
     img_array = np.array(image)
     
-    # Safety Check: If image has a transparent background (PNG), remove the 4th layer
     if img_array.shape[-1] == 4:
         img_array = img_array[..., :3]
         
-    # Create a batch of 1 (The model expects a list of images, even if it's just one)
-    # Shape becomes: (1, 224, 224, 3)
     img_array = tf.expand_dims(img_array, 0) 
 
-    # 2. Ask the Brain
     predictions = model.predict(img_array)
-    
-    # 3. Interpret Results
-    # "softmax" converts the weird math numbers into percentages (0.0 to 1.0)
     score = tf.nn.softmax(predictions[0]) 
     
-    # Find the winner (highest score)
     winner_index = np.argmax(score)
     predicted_class = CLASS_NAMES[winner_index]
-    confidence_score = 100 * np.max(score) # Convert 0.95 to 95.0
+    confidence_score = 100 * np.max(score)
 
     return {
         "class": predicted_class,
