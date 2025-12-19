@@ -1,6 +1,6 @@
 streamlit
 tensorflow
-tf-keras
+h5py
 numpy
 pillow
 streamlit-lottie
