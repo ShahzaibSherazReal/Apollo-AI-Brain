@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tf_keras # The helper tool for older models
 import numpy as np
 from PIL import Image
 import os
@@ -21,7 +22,7 @@ _model = None
 def load_prediction_model():
     global _model
     if _model is not None:
-        return _model, None  # Return Model + No Error
+        return _model, None
 
     # 1. Search for the file
     possible_locations = [
@@ -38,20 +39,15 @@ def load_prediction_model():
     if selected_path is None:
         return None, "File not found in Main or Models folder."
 
-    # 2. Check File Size (Crucial Check!)
-    file_size_mb = os.path.getsize(selected_path) / (1024 * 1024)
-    print(f"📂 Found model at {selected_path} | Size: {file_size_mb:.2f} MB")
-    
-    if file_size_mb < 1.0:
-        return None, f"File found but too small ({file_size_mb:.2f} MB). It should be ~10MB+. Upload failed?"
-
-    # 3. Try to Load
+    # 2. Load using the Helper Tool (tf_keras)
     try:
-        _model = tf.keras.models.load_model(selected_path)
+        print(f"🔄 Attempting to load model from {selected_path} using tf_keras...")
+        # We use tf_keras instead of standard keras to avoid the "Dense Layer" error
+        _model = tf_keras.models.load_model(selected_path)
+        print("✅ Model loaded successfully!")
         return _model, None
     except Exception as e:
-        # Return the ACTUAL error message from TensorFlow
-        return None, f"Corrupt File or Version Mismatch. Error: {str(e)}"
+        return None, f"Error loading model: {str(e)}"
 
 def predict_disease(image_file):
     model, error_msg = load_prediction_model()
@@ -59,16 +55,18 @@ def predict_disease(image_file):
     if model is None:
         return {"error": f"❌ {error_msg}"}
 
-    # Prepare and Predict
+    # Prepare Image
     target_size = (224, 224)
     image = image_file.resize(target_size)
     img_array = np.array(image)
     
+    # Ensure image has 3 channels (RGB)
     if img_array.shape[-1] == 4:
         img_array = img_array[..., :3]
         
     img_array = tf.expand_dims(img_array, 0) 
 
+    # Predict
     predictions = model.predict(img_array)
     score = tf.nn.softmax(predictions[0]) 
     
