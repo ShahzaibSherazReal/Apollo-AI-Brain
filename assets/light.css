@@ -1,0 +1,54 @@
+/* --- GLOBAL LIGHT THEME --- */
+.stApp {
+    background-color: #ffffff; /* Pure White Background */
+    color: #2c3e50; /* Dark Blue-Grey Text for readability */
+}
+
+/* --- CARD STYLE (Light Mode) --- */
+div[data-testid="stVerticalBlock"] > div > div[data-testid="stVerticalBlock"] {
+    background-color: #f8f9fa; /* Very Light Grey Cards */
+    border: 1px solid #e9ecef; /* Subtle border */
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05); /* Soft shadow */
+    transition: transform 0.2s;
+}
+div[data-testid="stVerticalBlock"] > div > div[data-testid="stVerticalBlock"]:hover {
+    transform: translateY(-5px);
+    border-color: #00b894; /* Green glow on hover */
+    box-shadow: 0 8px 12px rgba(0,0,0,0.1);
+}
+
+/* --- THE UPLOAD SECTION (Huge Dashed Box - Light) --- */
+[data-testid='stFileUploader'] {
+    width: 100%;
+}
+
+[data-testid='stFileUploader'] section {
+    padding: 6rem; /* Keep it HUGE */
+    background-color: #f1f3f5; /* Light grey box background */
+    border: 3px dashed #a0a0a0; /* Grey dashed border */
+    border-radius: 20px;
+    text-align: center;
+    transition: all 0.3s;
+}
+
+[data-testid='stFileUploader'] section:hover {
+    border-color: #00b894; /* Green border on hover */
+    background-color: #e8f5e9; /* Very faint green bg */
+    cursor: pointer;
+}
+
+[data-testid='stFileUploader'] button {
+    display: none;
+}
+
+/* --- REPORT BOX (Light Mode Results) --- */
+.report-box {
+    border: 1px solid #ddd;
+    padding: 25px;
+    border-radius: 12px;
+    background-color: #f8f9fa;
+    margin-top: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
