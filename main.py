@@ -7,12 +7,22 @@ from streamlit_lottie import st_lottie
 from utils.ai_brain import predict_disease
 
 # --- CONFIGURATION ---
-# UPDATED TITLE HERE
 st.set_page_config(page_title="Leaf Disease Detection", page_icon="🌿", layout="wide")
 
-# --- CUSTOM CSS FOR CARDS ---
+# --- CUSTOM CSS (THE FIX) ---
 st.markdown("""
 <style>
+    /* 1. MAKE MAIN BACKGROUND PURE BLACK */
+    .stApp {
+        background-color: #000000;
+    }
+    
+    /* 2. MAKE SIDEBAR PURE BLACK */
+    section[data-testid="stSidebar"] {
+        background-color: #000000;
+    }
+
+    /* 3. STYLE BUTTONS */
     .stButton>button {
         width: 100%;
         border-radius: 5px;
@@ -26,10 +36,19 @@ st.markdown("""
         color: white;
         border-color: #45a049;
     }
-    div[data-testid="stVerticalBlock"] > div {
-        background-color: #1E1E1E;
+
+    /* 4. TARGET ONLY THE CROP CARDS (Containers with borders) */
+    /* This specific selector targets the 'st.container(border=True)' elements */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #121212; /* Dark Grey for Cards */
+        border: 1px solid #333;
         border-radius: 10px;
         padding: 10px;
+    }
+    
+    /* 5. FIX TEXT COLOR & HEADINGS */
+    h1, h2, h3, p, div, span {
+        color: #E0E0E0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -107,7 +126,6 @@ KNOWLEDGE_BASE = {
 
 # --- PAGE 1: HOME (SELECTION SCREEN) ---
 if st.session_state.page == 'home':
-    # UPDATED TITLE HERE
     st.title("🌿 Leaf Disease Detection")
     st.subheader("① Select Your Plant System")
     st.write("Choose a crop below to initialize the specific diagnostic model.")
@@ -231,7 +249,6 @@ with st.sidebar:
     try:
         st.image("assets/logo.png", use_container_width=True)
     except:
-        # UPDATED TITLE HERE
         st.title("Leaf Disease Detection")
     
     st.markdown("---")
