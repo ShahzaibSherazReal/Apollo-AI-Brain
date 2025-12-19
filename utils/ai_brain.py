@@ -1,8 +1,10 @@
 import tensorflow as tf
-import tf_keras # The helper tool for older models
 import numpy as np
-from PIL import Image
+import h5py
+import json
 import os
+import tempfile
+from PIL import Image
 
 # --- CONFIGURATION ---
 CLASS_NAMES = [
@@ -37,17 +39,59 @@ def load_prediction_model():
             break
             
     if selected_path is None:
-        return None, "File not found in Main or Models folder."
+        return None, "File not found."
 
-    # 2. Load using the Helper Tool (tf_keras)
+    # 2. BRAIN SURGERY: Fix the 'batch_shape' error on the fly
     try:
-        print(f"🔄 Attempting to load model from {selected_path} using tf_keras...")
-        # We use tf_keras instead of standard keras to avoid the "Dense Layer" error
-        _model = tf_keras.models.load_model(selected_path)
+        print(f"🔧 Attempting to patch model file: {selected_path}")
+        
+        # Open the file and read the configuration
+        with h5py.File(selected_path, 'r') as f:
+            model_config = f.attrs.get('model_config')
+            if model_config is None:
+                raise ValueError("No model config found in file.")
+            
+            # Decode and parse JSON
+            if isinstance(model_config, bytes):
+                model_config = model_config.decode('utf-8')
+            config_dict = json.loads(model_config)
+
+        # RECURSIVE FUNCTION to find and delete 'batch_shape'
+        def remove_batch_shape(node):
+            if isinstance(node, dict):
+                if 'batch_shape' in node:
+                    print("🔪 Removed 'batch_shape' from config.")
+                    del node['batch_shape']
+                for key, value in node.items():
+                    remove_batch_shape(value)
+            elif isinstance(node, list):
+                for item in node:
+                    remove_batch_shape(item)
+
+        # Perform the surgery
+        remove_batch_shape(config_dict)
+
+        # Save to a temporary file
+        temp_dir = tempfile.gettempdir()
+        temp_path = os.path.join(temp_dir, 'patched_model.h5')
+        
+        # Copy original file to temp path first
+        import shutil
+        shutil.copy(selected_path, temp_path)
+        
+        # Overwrite the config in the temp file
+        with h5py.File(temp_path, 'r+') as f:
+            f.attrs['model_config'] = json.dumps(config_dict).encode('utf-8')
+
+        # 3. Load the Patched Model
+        print(f"🔄 Loading patched model from {temp_path}...")
+        _model = tf.keras.models.load_model(temp_path, compile=False)
         print("✅ Model loaded successfully!")
+        
         return _model, None
+
     except Exception as e:
-        return None, f"Error loading model: {str(e)}"
+        return None, f"Patching Failed: {str(e)}"
 
 def predict_disease(image_file):
     model, error_msg = load_prediction_model()
@@ -55,18 +99,15 @@ def predict_disease(image_file):
     if model is None:
         return {"error": f"❌ {error_msg}"}
 
-    # Prepare Image
     target_size = (224, 224)
     image = image_file.resize(target_size)
     img_array = np.array(image)
     
-    # Ensure image has 3 channels (RGB)
     if img_array.shape[-1] == 4:
         img_array = img_array[..., :3]
         
     img_array = tf.expand_dims(img_array, 0) 
 
-    # Predict
     predictions = model.predict(img_array)
     score = tf.nn.softmax(predictions[0]) 
     
