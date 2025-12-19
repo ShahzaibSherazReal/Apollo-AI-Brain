@@ -7,7 +7,8 @@ from streamlit_lottie import st_lottie
 from utils.ai_brain import predict_disease
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="AgroScan AI", page_icon="🌿", layout="wide")
+# UPDATED TITLE HERE
+st.set_page_config(page_title="Leaf Disease Detection", page_icon="🌿", layout="wide")
 
 # --- CUSTOM CSS FOR CARDS ---
 st.markdown("""
@@ -106,7 +107,8 @@ KNOWLEDGE_BASE = {
 
 # --- PAGE 1: HOME (SELECTION SCREEN) ---
 if st.session_state.page == 'home':
-    st.title("🌿 AgroScan AI")
+    # UPDATED TITLE HERE
+    st.title("🌿 Leaf Disease Detection")
     st.subheader("① Select Your Plant System")
     st.write("Choose a crop below to initialize the specific diagnostic model.")
     st.write("") # Spacer
@@ -229,7 +231,8 @@ with st.sidebar:
     try:
         st.image("assets/logo.png", use_container_width=True)
     except:
-        st.title("AgroScan AI")
+        # UPDATED TITLE HERE
+        st.title("Leaf Disease Detection")
     
     st.markdown("---")
     st.subheader("🧠 Model Status")
