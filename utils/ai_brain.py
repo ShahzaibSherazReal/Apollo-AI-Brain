@@ -16,10 +16,7 @@ CLASS_NAMES = [
     'potato_late_blight'
 ]
 
-# UPDATED PATH: We are looking for the file in the SAME directory as the app
-# This removes the "models/" folder complexity
-MODEL_PATH = "plant_disease_model.h5"
-
+# Global variable to cache the model
 _model = None
 
 def load_prediction_model():
@@ -27,15 +24,32 @@ def load_prediction_model():
     if _model is not None:
         return _model
 
-    # Debugging: Print where we are looking
-    print(f"🔍 Looking for model at: {os.path.abspath(MODEL_PATH)}")
-
-    if not os.path.exists(MODEL_PATH):
-        print("❌ CRITICAL ERROR: The file is not on the server!")
+    # --- SMART SEARCH: Hunt for the file ---
+    possible_locations = [
+        "plant_disease_model.h5",          # Option A: Main Folder
+        "models/plant_disease_model.h5",   # Option B: Models Folder
+        "Models/plant_disease_model.h5"    # Option C: Capitalized Folder
+    ]
+    
+    selected_path = None
+    
+    # Check all locations
+    for path in possible_locations:
+        if os.path.exists(path):
+            selected_path = path
+            print(f"✅ FOUND IT! Model is at: {path}")
+            break
+            
+    if selected_path is None:
+        # DEBUG: If not found, list what IS there to help us fix it
+        print("❌ CRITICAL: Model file not found in any expected folder.")
+        print(f"📂 Current Directory Files: {os.listdir('.')}")
+        if os.path.exists("models"):
+            print(f"📂 Models Folder Files: {os.listdir('models')}")
         return None
 
     try:
-        _model = tf.keras.models.load_model(MODEL_PATH)
+        _model = tf.keras.models.load_model(selected_path)
         print("✅ Model loaded successfully.")
         return _model
     except Exception as e:
@@ -46,8 +60,7 @@ def predict_disease(image_file):
     model = load_prediction_model()
     
     if model is None:
-        # This error will now show exactly what went wrong
-        return {"error": f"File '{MODEL_PATH}' not found on Cloud. Did you upload it to the main folder?"}
+        return {"error": "Model file MISSING. I checked the main folder and 'models' folder, but it's not there. Did the upload finish?"}
 
     target_size = (224, 224)
     image = image_file.resize(target_size)
