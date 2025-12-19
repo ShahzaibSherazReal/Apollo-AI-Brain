@@ -1,5 +1,6 @@
 streamlit
 tensorflow
+tf-keras
 numpy
 pillow
 streamlit-lottie
