@@ -9,61 +9,101 @@ from utils.ai_brain import predict_disease
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Leaf Disease Detection", page_icon="🌿", layout="wide")
 
-# --- CUSTOM CSS (THE FIX) ---
-st.markdown("""
-<style>
-    /* 1. MAKE MAIN BACKGROUND PURE BLACK */
-    .stApp {
-        background-color: #000000;
-    }
-    
-    /* 2. MAKE SIDEBAR PURE BLACK */
-    section[data-testid="stSidebar"] {
-        background-color: #000000;
-    }
-
-    /* 3. STYLE BUTTONS */
-    .stButton>button {
-        width: 100%;
-        border-radius: 5px;
-        height: 3em;
-        background-color: #2b2b2b;
-        color: white;
-        border: 1px solid #4CAF50;
-    }
-    .stButton>button:hover {
-        background-color: #4CAF50;
-        color: white;
-        border-color: #45a049;
-    }
-
-    /* 4. TARGET ONLY THE CROP CARDS (Containers with borders) */
-    /* This specific selector targets the 'st.container(border=True)' elements */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #121212; /* Dark Grey for Cards */
-        border: 1px solid #333;
-        border-radius: 10px;
-        padding: 10px;
-    }
-    
-    /* 5. FIX TEXT COLOR & HEADINGS */
-    h1, h2, h3, p, div, span {
-        color: #E0E0E0 !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# --- SESSION STATE MANAGEMENT ---
+# --- SESSION STATE INITIALIZATION ---
 if 'page' not in st.session_state:
     st.session_state.page = 'home'
 if 'selected_crop' not in st.session_state:
     st.session_state.selected_crop = None
+if 'theme' not in st.session_state:
+    st.session_state.theme = 'dark'  # Default to dark
 
+# --- THEME LOGIC ---
+def toggle_theme():
+    if st.session_state.theme == 'dark':
+        st.session_state.theme = 'light'
+    else:
+        st.session_state.theme = 'dark'
+
+# Define Colors based on current theme
+if st.session_state.theme == 'dark':
+    # DARK MODE PALETTE
+    main_bg = "#000000"
+    sidebar_bg = "#000000"
+    card_bg = "#121212"
+    text_color = "#E0E0E0"
+    border_color = "#333333"
+    button_bg = "#2b2b2b"
+    button_border = "#4CAF50"
+    button_text = "#FFFFFF"
+    card_shadow = "none"
+else:
+    # LIGHT MODE PALETTE
+    main_bg = "#FFFFFF"
+    sidebar_bg = "#F0F2F6"
+    card_bg = "#FFFFFF"
+    text_color = "#31333F"
+    border_color = "#DDDDDD"
+    button_bg = "#FFFFFF"
+    button_border = "#4CAF50"
+    button_text = "#31333F"
+    card_shadow = "0 4px 6px rgba(0,0,0,0.1)"
+
+# --- INJECT DYNAMIC CSS ---
+st.markdown(f"""
+<style>
+    /* 1. MAIN BACKGROUND */
+    .stApp {{
+        background-color: {main_bg};
+    }}
+    
+    /* 2. SIDEBAR BACKGROUND */
+    section[data-testid="stSidebar"] {{
+        background-color: {sidebar_bg};
+    }}
+
+    /* 3. BUTTON STYLES */
+    .stButton>button {{
+        width: 100%;
+        border-radius: 5px;
+        height: 3em;
+        background-color: {button_bg};
+        color: {button_text};
+        border: 1px solid {button_border};
+        transition: all 0.3s ease;
+    }}
+    .stButton>button:hover {{
+        background-color: #4CAF50;
+        color: white;
+        border-color: #45a049;
+    }}
+
+    /* 4. CARD STYLES */
+    div[data-testid="stVerticalBlockBorderWrapper"] {{
+        background-color: {card_bg};
+        border: 1px solid {border_color};
+        border-radius: 10px;
+        padding: 10px;
+        box-shadow: {card_shadow};
+    }}
+    
+    /* 5. TEXT COLOR OVERRIDES */
+    h1, h2, h3, h4, h5, h6, p, div, span, li, label {{
+        color: {text_color} !important;
+    }}
+    
+    /* Fix for file uploader text in light mode */
+    .stFileUploader label {{
+        color: {text_color} !important;
+    }}
+</style>
+""", unsafe_allow_html=True)
+
+# --- NAVIGATION FUNCTION ---
 def navigate_to(page, crop=None):
     st.session_state.page = page
     st.session_state.selected_crop = crop
 
-# --- ASSETS & ANIMATIONS ---
+# --- ASSETS ---
 def load_lottieurl(url: str):
     try:
         r = requests.get(url)
@@ -75,7 +115,7 @@ def load_lottieurl(url: str):
 
 lottie_brain = load_lottieurl("https://lottie.host/60630956-e216-4298-905d-2a3543500410/3t49238088.json")
 
-# --- EMBEDDED DATABASE ---
+# --- DATABASE ---
 KNOWLEDGE_BASE = {
     "Apple Black Rot": {
         "disease_name": "Apple Black Rot",
@@ -124,12 +164,12 @@ KNOWLEDGE_BASE = {
     }
 }
 
-# --- PAGE 1: HOME (SELECTION SCREEN) ---
+# --- PAGE 1: HOME ---
 if st.session_state.page == 'home':
     st.title("🌿 Leaf Disease Detection")
     st.subheader("① Select Your Plant System")
     st.write("Choose a crop below to initialize the specific diagnostic model.")
-    st.write("") # Spacer
+    st.write("") 
 
     col1, col2, col3 = st.columns(3)
 
@@ -138,7 +178,7 @@ if st.session_state.page == 'home':
         with st.container(border=True):
             st.markdown("<h1 style='text-align: center;'>🍎</h1>", unsafe_allow_html=True)
             st.markdown("<h3 style='text-align: center;'>Apple</h3>", unsafe_allow_html=True)
-            st.write("Detects: Scab, Black Rot, Rust")
+            st.write("Detects: Scab, Rot, Healthy")
             if st.button("Select Apple Model"):
                 navigate_to('predict', 'Apple')
 
@@ -147,7 +187,7 @@ if st.session_state.page == 'home':
         with st.container(border=True):
             st.markdown("<h1 style='text-align: center;'>🌽</h1>", unsafe_allow_html=True)
             st.markdown("<h3 style='text-align: center;'>Corn (Maize)</h3>", unsafe_allow_html=True)
-            st.write("Detects: Blight, Rust, Gray Leaf")
+            st.write("Detects: Blight, Rust, Healthy")
             if st.button("Select Corn Model"):
                 navigate_to('predict', 'Corn')
 
@@ -156,7 +196,7 @@ if st.session_state.page == 'home':
         with st.container(border=True):
             st.markdown("<h1 style='text-align: center;'>🥔</h1>", unsafe_allow_html=True)
             st.markdown("<h3 style='text-align: center;'>Potato</h3>", unsafe_allow_html=True)
-            st.write("Detects: Early Blight, Late Blight")
+            st.write("Detects: Early Blight, Late Blight, Healthy")
             if st.button("Select Potato Model"):
                 navigate_to('predict', 'Potato')
     
@@ -164,10 +204,9 @@ if st.session_state.page == 'home':
     st.caption("🚀 More crops (Tomato, Grape, Cotton) coming in v3.0 update...")
 
 
-# --- PAGE 2: PREDICTION (ANALYSIS SCREEN) ---
+# --- PAGE 2: PREDICTION ---
 elif st.session_state.page == 'predict':
     
-    # Back Button Logic
     col_back, col_title = st.columns([1, 8])
     with col_back:
         if st.button("← Back"):
@@ -189,7 +228,6 @@ elif st.session_state.page == 'predict':
         
         if st.button("Analyze Specimen"):
             with col2:
-                # Animation
                 anim_placeholder = st.empty()
                 with anim_placeholder.container():
                     c1, c2 = st.columns([1,3])
@@ -206,21 +244,17 @@ elif st.session_state.page == 'predict':
                 
                 anim_placeholder.empty()
 
-                # --- THE AI PREDICTION ---
                 result = predict_disease(image)
                 
                 if "error" in result:
                     st.error("❌ Model Error: " + result["error"])
                 else:
-                    disease_key = result["class"] # e.g., "apple_black_rot"
+                    disease_key = result["class"]
                     confidence = result["confidence"]
                     
-                    # --- SMART MATCHING LOGIC ---
                     clean_name = disease_key.replace("_", " ").lower()
-                    
                     found_info = None
                     
-                    # Scan database keys to find a match
                     for db_key in KNOWLEDGE_BASE:
                         if clean_name in db_key.lower():
                             found_info = KNOWLEDGE_BASE[db_key]
@@ -228,10 +262,14 @@ elif st.session_state.page == 'predict':
                     
                     if found_info:
                         st.toast("Identification Complete", icon="🧬")
+                        # Info Card Style
+                        info_bg = "#F0F2F6" if st.session_state.theme == 'light' else "#2b2b2b"
+                        text_c = "#31333F" if st.session_state.theme == 'light' else "#ccc"
+                        
                         st.markdown(f"""
-                        <div style="background-color: #2b2b2b; padding: 20px; border-radius: 10px; border-left: 5px solid #00b894;">
-                            <h2 style="color: #00b894; margin:0;">{found_info['disease_name']}</h2>
-                            <p style="color: #ccc; margin-top:5px;">AI Confidence: <strong>{confidence}</strong></p>
+                        <div style="background-color: {info_bg}; padding: 20px; border-radius: 10px; border-left: 5px solid #00b894;">
+                            <h2 style="color: #00b894 !important; margin:0;">{found_info['disease_name']}</h2>
+                            <p style="color: {text_c} !important; margin-top:5px;">AI Confidence: <strong>{confidence}</strong></p>
                         </div>
                         """, unsafe_allow_html=True)
                         
@@ -239,17 +277,22 @@ elif st.session_state.page == 'predict':
                         st.markdown(f"**🔬 Description:** {found_info['description']}")
                         st.markdown(f"**💊 Treatment:** {found_info['treatment']}")
                     else:
-                        # Fallback if AI predicts a class we don't have text for
                         st.warning(f"AI Detected: **{disease_key}**")
                         st.caption(f"Confidence: {confidence}")
                         st.info("No detailed description found in database for this specific disease.")
 
-# --- SIDEBAR (Always Visible) ---
+# --- SIDEBAR ---
 with st.sidebar:
     try:
         st.image("assets/logo.png", use_container_width=True)
     except:
         st.title("Leaf Disease Detection")
+    
+    # --- THEME TOGGLE BUTTON ---
+    btn_text = "☀️ Light Mode" if st.session_state.theme == 'dark' else "🌑 Dark Mode"
+    if st.button(btn_text):
+        toggle_theme()
+        st.rerun() # Force reload to apply new CSS immediately
     
     st.markdown("---")
     st.subheader("🧠 Model Status")
