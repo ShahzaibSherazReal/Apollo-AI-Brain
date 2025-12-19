@@ -1,6 +1,5 @@
 streamlit
 tensorflow
-h5py
 numpy
 pillow
 streamlit-lottie
