@@ -36,13 +36,11 @@ def load_prediction_model():
     if selected_path is None:
         return None, "File not found on server."
 
-    # 2. THE BYPASS STRATEGY
-    # We read the config manually, fix it, build the structure, then load weights.
+    # 2. THE BYPASS STRATEGY (Enhanced)
     try:
         print(f"🔧 Starting manual reconstruction of: {selected_path}")
         
         with h5py.File(selected_path, 'r') as f:
-            # Read the architecture JSON string
             model_config = f.attrs.get('model_config')
             if model_config is None:
                 raise ValueError("No config found in file.")
@@ -52,15 +50,13 @@ def load_prediction_model():
             
             model_json = json.loads(model_config)
 
-        # RECURSIVE FIXER: Find 'batch_shape' and rename to 'batch_input_shape'
+        # A. FIX: Rename 'batch_shape' to 'batch_input_shape'
         def fix_json_config(node):
             if isinstance(node, dict):
-                # The Fix: Swap the key
                 if 'batch_shape' in node:
                     node['batch_input_shape'] = node['batch_shape']
                     del node['batch_shape']
                 
-                # Also check inside 'config' dictionaries
                 if 'config' in node and isinstance(node['config'], dict):
                     if 'batch_shape' in node['config']:
                         node['config']['batch_input_shape'] = node['config']['batch_shape']
@@ -72,12 +68,32 @@ def load_prediction_model():
                 for item in node:
                     fix_json_config(item)
 
-        # Apply the fix
         fix_json_config(model_json)
 
-        # 3. Rebuild Model from the Fixed JSON
+        # B. FIX: Define the Translation Dictionary (The "Rosetta Stone")
+        # This tells the loader exactly what every word means
+        custom_objects = {
+            "Sequential": tf.keras.Sequential,
+            "Functional": tf.keras.Model,
+            "InputLayer": tf.keras.layers.InputLayer,
+            "Rescaling": tf.keras.layers.Rescaling,
+            "Conv2D": tf.keras.layers.Conv2D,
+            "BatchNormalization": tf.keras.layers.BatchNormalization,
+            "ReLU": tf.keras.layers.ReLU,
+            "DepthwiseConv2D": tf.keras.layers.DepthwiseConv2D,
+            "ZeroPadding2D": tf.keras.layers.ZeroPadding2D,
+            "Add": tf.keras.layers.Add,
+            "GlobalAveragePooling2D": tf.keras.layers.GlobalAveragePooling2D,
+            "Dropout": tf.keras.layers.Dropout,
+            "Dense": tf.keras.layers.Dense
+        }
+
+        # 3. Rebuild Model with the Dictionary
         print("🔨 Rebuilding model architecture...")
-        _model = tf.keras.models.model_from_json(json.dumps(model_json))
+        _model = tf.keras.models.model_from_json(
+            json.dumps(model_json), 
+            custom_objects=custom_objects  # <--- This fixes the 'Could not locate' error
+        )
 
         # 4. Load the Weights
         print("⚖️ Loading weights...")
