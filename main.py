@@ -2,11 +2,45 @@ import streamlit as st
 from PIL import Image
 import time
 import requests
+import os
 from streamlit_lottie import st_lottie
 from utils.ai_brain import predict_disease
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Leaf Disease Detection", page_icon="🌿", layout="wide")
+
+# ==========================================
+# 🛠️ SYSTEM DIAGNOSTICS (DEBUGGING TOOL)
+# This will show us EXACTLY where the files are on the cloud
+# ==========================================
+with st.expander("🕵️‍♂️ CLICK HERE TO SEE SERVER FILES (Debug Menu)", expanded=True):
+    st.write("📂 **Files in Main Folder (Root):**")
+    try:
+        files = os.listdir('.')
+        st.code(files)
+        
+        # Check specifically for the model
+        if "plant_disease_model.h5" in files:
+            st.success("✅ FOUND: 'plant_disease_model.h5' is in the Main Folder!")
+        else:
+            st.error("❌ MISSING: 'plant_disease_model.h5' is NOT in the Main Folder.")
+            
+    except Exception as e:
+        st.error(f"Error reading root: {e}")
+
+    st.write("📂 **Files in 'models' Folder:**")
+    if os.path.exists('models'):
+        try:
+            model_files = os.listdir('models')
+            st.code(model_files)
+            if "plant_disease_model.h5" in model_files:
+                st.success("✅ FOUND: 'plant_disease_model.h5' is in the 'models' folder!")
+        except Exception as e:
+            st.error(f"Error reading models folder: {e}")
+    else:
+        st.warning("⚠️ The 'models' folder does not exist on this server.")
+
+# ==========================================
 
 # --- ASSETS & ANIMATIONS ---
 def load_lottieurl(url: str):
@@ -29,7 +63,7 @@ def load_css(file_name):
 
 load_css("assets/dark.css")
 
-# --- EMBEDDED DATABASE (No external file needed!) ---
+# --- EMBEDDED DATABASE ---
 KNOWLEDGE_BASE = {
     "Apple Black Rot": {
         "disease_name": "Apple Black Rot",
@@ -130,7 +164,7 @@ if uploaded_file is not None:
             
             if "error" in result:
                 st.error("❌ Model Error: " + result["error"])
-                st.warning("Did you forget to upload the .h5 file to the 'models' folder?")
+                st.warning("Please check the 'Debug Menu' at the top to see if your file is missing.")
             else:
                 disease_key = result["class"] # e.g., "apple_black_rot"
                 confidence = result["confidence"]
