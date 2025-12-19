@@ -1,6 +1,5 @@
 import streamlit as st
 from PIL import Image
-import json
 import time
 import requests
 from streamlit_lottie import st_lottie
@@ -8,6 +7,7 @@ from utils.ai_brain import predict_disease
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Leaf Disease Detection", page_icon="🌿", layout="wide")
+
 # --- ASSETS & ANIMATIONS ---
 def load_lottieurl(url: str):
     try:
@@ -18,7 +18,6 @@ def load_lottieurl(url: str):
     except:
         return None
 
-# The "Brain" Doodle Animation
 lottie_brain = load_lottieurl("https://lottie.host/60630956-e216-4298-905d-2a3543500410/3t49238088.json")
 
 def load_css(file_name):
@@ -28,17 +27,56 @@ def load_css(file_name):
     except:
         pass
 
-# Load Dark Mode
 load_css("assets/dark.css")
 
-# Load Database (Text Descriptions)
-try:
-    with open("database.json", "r") as f:
-        KNOWLEDGE_BASE = json.load(f)
-except:
-    # If database is missing, we create a fake empty one to prevent crashing
-    KNOWLEDGE_BASE = {}
-    st.error("⚠️ Error: database.json not found. Text descriptions will be missing.")
+# --- EMBEDDED DATABASE (No external file needed!) ---
+KNOWLEDGE_BASE = {
+    "Apple Black Rot": {
+        "disease_name": "Apple Black Rot",
+        "description": "A fungal disease caused by Botryosphaeria obtusa. It causes purple spots on leaves and rotting fruit that turns black and mummified.",
+        "treatment": "Prune dead branches, remove mummified fruit, and use fungicides like Captan or Sulfur."
+    },
+    "Apple Healthy": {
+        "disease_name": "Healthy Apple Leaf",
+        "description": "The plant is in good health. Leaves are green, vibrant, and free of spots or lesions.",
+        "treatment": "Continue regular watering and fertilization. No treatment needed."
+    },
+    "Apple Scab": {
+        "disease_name": "Apple Scab",
+        "description": "A serious fungal disease causing olive-green to black velvety spots on leaves and fruit.",
+        "treatment": "Remove fallen leaves to prevent wintering spores. Apply fungicides early in the season."
+    },
+    "Corn Common Rust": {
+        "disease_name": "Corn Common Rust",
+        "description": "Fungal pustules appear on leaves, turning from cinnamon-brown to black as the plant matures.",
+        "treatment": "Plant resistant hybrids. Fungicides are effective if applied early."
+    },
+    "Corn Healthy": {
+        "disease_name": "Healthy Corn Plant",
+        "description": "Vibrant green leaves with no signs of discoloration or pustules.",
+        "treatment": "Maintain proper irrigation and nitrogen levels."
+    },
+    "Corn Leaf Blight": {
+        "disease_name": "Northern Corn Leaf Blight",
+        "description": "Large, cigar-shaped grey-green lesions on leaves that can kill the plant tissue.",
+        "treatment": "Crop rotation and resistant varieties are the best defense. Fungicides may be needed for severe cases."
+    },
+    "Potato Early Blight": {
+        "disease_name": "Potato Early Blight",
+        "description": "Target-shaped bullseye spots with yellow halos on older leaves.",
+        "treatment": "Improve air circulation, avoid overhead watering, and apply copper-based fungicides."
+    },
+    "Potato Healthy": {
+        "disease_name": "Healthy Potato Plant",
+        "description": "Leaves are dark green and firm. No signs of wilting or spotting.",
+        "treatment": "Keep soil moist but well-drained. Hilling soil around the base helps tuber growth."
+    },
+    "Potato Late Blight": {
+        "disease_name": "Potato Late Blight",
+        "description": "The disease that caused the Irish Potato Famine. Water-soaked spots turn brown/black with white mold.",
+        "treatment": "Remove infected plants immediately (do not compost). Apply preventative fungicides regularly."
+    }
+}
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -105,7 +143,6 @@ if uploaded_file is not None:
                 found_info = None
                 
                 # Scan database keys to find a match
-                # We check if our "clean_name" is inside any database key
                 for db_key in KNOWLEDGE_BASE:
                     if clean_name in db_key.lower():
                         found_info = KNOWLEDGE_BASE[db_key]
