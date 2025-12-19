@@ -1,14 +1,8 @@
-import os
-# ==========================================
-# 🛑 CRITICAL FIX: FORCE LEGACY MODE
-# This tells the server to act like the old TensorFlow
-# This fixes the "Dense Layer" and "Batch Shape" errors instantly.
-os.environ['TF_USE_LEGACY_KERAS'] = '1'
-# ==========================================
-
-import tensorflow as tf
 import numpy as np
 from PIL import Image
+import os
+import tensorflow as tf
+import tf_keras  # <--- THIS is the specific tool we installed to read your file
 
 # --- CONFIGURATION ---
 CLASS_NAMES = [
@@ -30,7 +24,7 @@ def load_prediction_model():
     if _model is not None:
         return _model, None
 
-    # 1. Simple Search
+    # 1. Search for the file
     possible_locations = [
         "plant_disease_model.h5",
         "models/plant_disease_model.h5"
@@ -45,11 +39,14 @@ def load_prediction_model():
     if selected_path is None:
         return None, "File not found. Please upload .h5 file to GitHub."
 
-    # 2. Load the Model (Standard Way)
-    # Because we set the Legacy Flag at the top, this will now work!
+    # 2. Load the Model using tf_keras (The Legacy Tool)
     try:
-        print(f"🔄 Loading model from {selected_path} in Legacy Mode...")
-        _model = tf.keras.models.load_model(selected_path)
+        print(f"🔄 Loading model from {selected_path} using tf_keras...")
+        
+        # 🛑 CRITICAL CHANGE: We use tf_keras.models, NOT tf.keras.models
+        # This bypasses the 'batch_shape' error completely.
+        _model = tf_keras.models.load_model(selected_path)
+        
         print("✅ Model loaded successfully!")
         return _model, None
     except Exception as e:
