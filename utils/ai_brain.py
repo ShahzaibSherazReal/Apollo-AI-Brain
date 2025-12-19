@@ -16,52 +16,50 @@ CLASS_NAMES = [
     'potato_late_blight'
 ]
 
-# Global variable to cache the model
 _model = None
 
 def load_prediction_model():
     global _model
     if _model is not None:
-        return _model
+        return _model, None  # Return Model + No Error
 
-    # --- SMART SEARCH: Hunt for the file ---
+    # 1. Search for the file
     possible_locations = [
-        "plant_disease_model.h5",          # Option A: Main Folder
-        "models/plant_disease_model.h5",   # Option B: Models Folder
-        "Models/plant_disease_model.h5"    # Option C: Capitalized Folder
+        "plant_disease_model.h5",
+        "models/plant_disease_model.h5"
     ]
     
     selected_path = None
-    
-    # Check all locations
     for path in possible_locations:
         if os.path.exists(path):
             selected_path = path
-            print(f"✅ FOUND IT! Model is at: {path}")
             break
             
     if selected_path is None:
-        # DEBUG: If not found, list what IS there to help us fix it
-        print("❌ CRITICAL: Model file not found in any expected folder.")
-        print(f"📂 Current Directory Files: {os.listdir('.')}")
-        if os.path.exists("models"):
-            print(f"📂 Models Folder Files: {os.listdir('models')}")
-        return None
+        return None, "File not found in Main or Models folder."
 
+    # 2. Check File Size (Crucial Check!)
+    file_size_mb = os.path.getsize(selected_path) / (1024 * 1024)
+    print(f"📂 Found model at {selected_path} | Size: {file_size_mb:.2f} MB")
+    
+    if file_size_mb < 1.0:
+        return None, f"File found but too small ({file_size_mb:.2f} MB). It should be ~10MB+. Upload failed?"
+
+    # 3. Try to Load
     try:
         _model = tf.keras.models.load_model(selected_path)
-        print("✅ Model loaded successfully.")
-        return _model
+        return _model, None
     except Exception as e:
-        print(f"❌ Error loading model: {e}")
-        return None
+        # Return the ACTUAL error message from TensorFlow
+        return None, f"Corrupt File or Version Mismatch. Error: {str(e)}"
 
 def predict_disease(image_file):
-    model = load_prediction_model()
+    model, error_msg = load_prediction_model()
     
     if model is None:
-        return {"error": "Model file MISSING. I checked the main folder and 'models' folder, but it's not there. Did the upload finish?"}
+        return {"error": f"❌ {error_msg}"}
 
+    # Prepare and Predict
     target_size = (224, 224)
     image = image_file.resize(target_size)
     img_array = np.array(image)
