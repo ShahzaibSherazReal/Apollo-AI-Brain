@@ -76,7 +76,7 @@ def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
 
 # --- 5. HOME PAGE ---
 if st.session_state.page == 'home':
-    st.title("🌿 Leaf Disease Detection (v3.1)")
+    st.title("🌿 Leaf Disease Detection (v3.2)")
     st.subheader("① Select Your Plant System")
     col1, col2, col3 = st.columns(3)
     crops = [("🍎", "Apple"), ("🌽", "Corn"), ("🥔", "Potato")]
@@ -85,7 +85,7 @@ if st.session_state.page == 'home':
             with st.container(border=True):
                 st.markdown(f"<h1 style='text-align:center;'>{emoji}</h1><h3 style='text-align:center;'>{name}</h3>", unsafe_allow_html=True)
                 if st.button(f"Select {name}", key=f"btn_{name}"): navigate_to('predict', name)
-    st.caption("🚀 v3.1 Update: Strict Crop Validation Enabled")
+    st.caption("🚀 v3.2 Update: Optimized for Real-World Images")
 
 # --- 6. PREDICTION PAGE ---
 elif st.session_state.page == 'predict':
@@ -139,8 +139,8 @@ elif st.session_state.page == 'predict':
                         </div>
                         """, unsafe_allow_html=True)
                 
-                # 2. LOW CONFIDENCE CHECK (The Safety Net)
-                elif confidence_val < 70.0:
+                # 2. LOW CONFIDENCE CHECK (UPDATED TO 20%)
+                elif confidence_val < 20.0:
                     with results_placeholder.container():
                         st.warning(f"⚠️ Low Confidence Alert ({confidence_val}%)")
                         st.markdown(f"""
