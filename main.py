@@ -30,7 +30,6 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # --- 3. DATA & STRICT VALIDATION LISTS ---
-# 🔒 THE BOUNCER LIST: Only these specific results are allowed in each section
 ALLOWED_CLASSES = {
     "Apple": ["apple_black_rot", "apple_healthy", "apple_scab"],
     "Corn": ["corn_common_rust", "corn_healthy", "corn_leaf_blight"],
@@ -74,7 +73,33 @@ def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
             g2.progress(min(i / height, 1.0))
         time.sleep(0.05)
 
-# --- 5. HOME PAGE ---
+# --- 5. SIDEBAR (NEW FEATURES ADDED) ---
+with st.sidebar:
+    st.title("Leaf Disease Detection")
+    
+    # [NEW FEATURE 1] Home Button
+    if st.button("🏠 Return Home"):
+        navigate_to('home')
+        st.rerun()
+
+    st.markdown("---")
+    st.subheader("Settings")
+    if st.toggle("🌙 Dark Mode", value=st.session_state.dark_mode):
+        if not st.session_state.dark_mode: st.session_state.dark_mode = True; st.rerun()
+    else:
+        if st.session_state.dark_mode: st.session_state.dark_mode = False; st.rerun()
+    
+    st.markdown("---")
+    
+    # [NEW FEATURE 2] About Section
+    with st.expander("ℹ️ About This App"):
+        st.caption("This application uses a MobileNetV2 Neural Network to detect plant diseases in real-time.")
+        st.caption("Supported Crops: Apple, Corn, Potato.")
+        st.caption("Version: 3.2 (Stable)")
+
+    st.success("🟢 Neural Engine Online")
+
+# --- 6. HOME PAGE ---
 if st.session_state.page == 'home':
     st.title("🌿 Leaf Disease Detection (v3.2)")
     st.subheader("① Select Your Plant System")
@@ -85,9 +110,9 @@ if st.session_state.page == 'home':
             with st.container(border=True):
                 st.markdown(f"<h1 style='text-align:center;'>{emoji}</h1><h3 style='text-align:center;'>{name}</h3>", unsafe_allow_html=True)
                 if st.button(f"Select {name}", key=f"btn_{name}"): navigate_to('predict', name)
-    st.caption("🚀 v3.2 Update: Optimized for Real-World Images")
+    st.caption("🚀 v3.2 Update: Sidebar Navigation Added")
 
-# --- 6. PREDICTION PAGE ---
+# --- 7. PREDICTION PAGE ---
 elif st.session_state.page == 'predict':
     col_back, col_title = st.columns([1, 8])
     with col_back:
@@ -116,16 +141,13 @@ elif st.session_state.page == 'predict':
             if "error" in result:
                 results_placeholder.error("❌ " + result["error"])
             else:
-                # --- CORE LOGIC START ---
-                prediction_key = result["class"] # e.g. "potato_healthy"
+                prediction_key = result["class"]
                 confidence_str = result["confidence"].replace('%', '')
                 confidence_val = float(confidence_str)
                 
-                current_section = st.session_state.selected_crop # e.g. "Apple"
+                current_section = st.session_state.selected_crop
                 valid_keys = ALLOWED_CLASSES.get(current_section, [])
 
-                # 1. STRICT MISMATCH CHECK
-                # If the predicted result is NOT on the allowed list, reject it immediately.
                 if prediction_key not in valid_keys:
                     with results_placeholder.container():
                         st.error("⚠️ WRONG LEAF DETECTED")
@@ -139,18 +161,16 @@ elif st.session_state.page == 'predict':
                         </div>
                         """, unsafe_allow_html=True)
                 
-                # 2. LOW CONFIDENCE CHECK (UPDATED TO 20%)
                 elif confidence_val < 20.0:
                     with results_placeholder.container():
                         st.warning(f"⚠️ Low Confidence Alert ({confidence_val}%)")
                         st.markdown(f"""
                         <div style="background-color: {card_bg}; padding: 15px; border-radius: 10px; border: 1px solid #FFA500;">
                             <h3 style="color: #FFA500 !important;">Unclear Image</h3>
-                            <p>The AI is only {confidence_val}% sure. It might be a blurry image or a wrong leaf type.</p>
+                            <p>The AI is only {confidence_val}% sure.</p>
                         </div>
                         """, unsafe_allow_html=True)
 
-                # 3. SUCCESS MATCH
                 else:
                     clean_name = prediction_key.replace("_", " ").lower()
                     found_info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
@@ -169,15 +189,3 @@ elif st.session_state.page == 'predict':
                             """, unsafe_allow_html=True)
                         else:
                             st.warning(f"Detected: {prediction_key} (No DB Info)")
-
-# --- 7. SIDEBAR ---
-with st.sidebar:
-    st.title("Leaf Disease Detection")
-    st.markdown("---")
-    st.subheader("Settings")
-    if st.toggle("🌙 Dark Mode", value=st.session_state.dark_mode):
-        if not st.session_state.dark_mode: st.session_state.dark_mode = True; st.rerun()
-    else:
-        if st.session_state.dark_mode: st.session_state.dark_mode = False; st.rerun()
-    st.markdown("---")
-    st.success("🟢 Neural Engine Online")
