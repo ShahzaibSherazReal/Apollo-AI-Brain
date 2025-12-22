@@ -9,7 +9,7 @@ from streamlit_lottie import st_lottie
 from utils.ai_brain import predict_disease
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="Leaf Disease Detection", page_icon="🌿", layout="wide")
+st.set_page_config(page_title="Leaf Disease Detection (v3.1)", page_icon="🌿", layout="wide")
 
 # --- 2. SESSION STATE & THEME INITIALIZATION ---
 if 'dark_mode' not in st.session_state:
@@ -203,7 +203,7 @@ elif st.session_state.page == 'predict':
 
 # --- 9. SIDEBAR (SETTINGS & STATUS) ---
 with st.sidebar:
-    st.title("Leaf Disease Detection")
+    st.title("Leaf Disease Detection (v3.1)")
     st.markdown("---")
     
     # Light/Dark Toggle Logic
