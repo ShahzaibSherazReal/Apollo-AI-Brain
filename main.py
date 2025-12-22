@@ -14,7 +14,7 @@ if 'dark_mode' not in st.session_state: st.session_state.dark_mode = True
 if 'page' not in st.session_state: st.session_state.page = 'home'
 if 'selected_crop' not in st.session_state: st.session_state.selected_crop = None
 
-# [NEW] Initialize History Memory
+# Initialize History Memory
 if 'scan_history' not in st.session_state: 
     st.session_state.scan_history = []
 
@@ -86,7 +86,6 @@ with st.sidebar:
         navigate_to('home')
         st.rerun()
 
-    # [NEW] History Button
     if st.button("📜 History Log"):
         navigate_to('history')
         st.rerun()
@@ -119,11 +118,11 @@ with st.sidebar:
 
     st.markdown("---")
     st.success("🟢 Neural Engine Online")
-    st.caption("v4.0 - History Module Active")
+    st.caption("v4.1 - Full History Management")
 
 # --- 6. HOME PAGE ---
 if st.session_state.page == 'home':
-    st.title("🌿 Leaf Disease Detection (v4.0)")
+    st.title("🌿 Leaf Disease Detection (v4.1)")
     st.subheader("① Select Your Plant System")
     col1, col2, col3 = st.columns(3)
     crops = [("🍎", "Apple"), ("🌽", "Corn"), ("🥔", "Potato")]
@@ -133,33 +132,80 @@ if st.session_state.page == 'home':
                 st.markdown(f"<h1 style='text-align:center;'>{emoji}</h1><h3 style='text-align:center;'>{name}</h3>", unsafe_allow_html=True)
                 if st.button(f"Select {name}", key=f"btn_{name}"): navigate_to('predict', name)
 
-# --- 7. HISTORY PAGE [NEW SECTION] ---
+# --- 7. HISTORY PAGE [UPDATED] ---
 elif st.session_state.page == 'history':
     st.title("📜 Scan Log")
     
-    # 7.1 Filter Selection
-    filter_col, _ = st.columns([1, 3])
-    with filter_col:
-        filter_option = st.selectbox("Filter by Crop History:", ["All", "Apple", "Corn", "Potato"])
+    # 7.1 Filter & Controls
+    col_filter1, col_filter2, col_action = st.columns([2, 2, 2])
+    
+    with col_filter1:
+        # Filter by Crop
+        filter_crop = st.selectbox("Filter by Crop:", ["All", "Apple", "Corn", "Potato"])
+    
+    with col_filter2:
+        # Filter by Date (Calendar)
+        use_date = st.toggle("Filter by Date")
+        if use_date:
+            filter_date = st.date_input("Select Date", datetime.date.today())
+        else:
+            filter_date = None
+
+    with col_action:
+        # Delete All Button
+        st.write("") # Spacer
+        if st.button("🗑️ Clear All History", type="primary"):
+            st.session_state.scan_history = []
+            st.rerun()
 
     st.markdown("---")
 
-    # 7.2 Logic to show history
+    # 7.2 Display History
     if not st.session_state.scan_history:
         st.info("No scans recorded yet. Go to Home and perform a scan.")
     else:
-        # Loop through history backwards (newest first)
-        for scan in reversed(st.session_state.scan_history):
-            # Apply Filter
-            if filter_option == "All" or scan['crop'] == filter_option:
-                with st.container(border=True):
-                    c1, c2 = st.columns([1, 3])
-                    with c1:
-                        st.image(scan['image'], width=150, caption=scan['timestamp'])
-                    with c2:
-                        st.subheader(f"{scan['disease_name']}")
-                        st.caption(f"Crop: {scan['crop']} | Confidence: {scan['confidence']}%")
-                        st.write(f"**💊 Cure:** {scan['treatment']}")
+        # We iterate through the original list with index (enumerate)
+        # We reverse it to show newest first, but keep original indices for deletion
+        # This requires a bit of logic:
+        
+        # 1. Create a list of items to display (matching filters)
+        display_items = []
+        for index, item in enumerate(st.session_state.scan_history):
+            # Check Crop Filter
+            if filter_crop != "All" and item['crop'] != filter_crop:
+                continue
+            # Check Date Filter
+            if filter_date:
+                item_date = item['timestamp'].split(" ")[0] # Extract "2025-12-22"
+                if item_date != str(filter_date):
+                    continue
+            display_items.append((index, item)) # Store (Original_Index, Data)
+
+        # 2. Show Items (Newest First)
+        if not display_items:
+            st.warning("No records found for this date/crop.")
+        
+        for original_index, scan in reversed(display_items):
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([1, 4, 1])
+                
+                # Image
+                with c1:
+                    st.image(scan['image'], width=100)
+                
+                # Info
+                with c2:
+                    st.subheader(f"{scan['disease_name']}")
+                    st.caption(f"📅 {scan['timestamp']} | Crop: {scan['crop']}")
+                    st.write(f"**💊 Cure:** {scan['treatment']}")
+                
+                # Delete Button
+                with c3:
+                    st.write("") # Spacer
+                    # Unique key is essential here!
+                    if st.button("🗑️", key=f"del_{original_index}"):
+                        st.session_state.scan_history.pop(original_index)
+                        st.rerun() # Refresh immediately to update list
 
 # --- 8. PREDICTION PAGE ---
 elif st.session_state.page == 'predict':
@@ -209,13 +255,13 @@ elif st.session_state.page == 'predict':
                         st.warning(f"⚠️ Low Confidence Alert ({confidence_val}%)")
                         st.info("Image unclear.")
 
-                # 3. Success & SAVE TO HISTORY [UPDATED]
+                # 3. Success & SAVE TO HISTORY
                 else:
                     clean_name = prediction_key.replace("_", " ").lower()
                     found_info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
                     
                     if found_info:
-                        # --- [NEW] SAVE TO HISTORY ---
+                        # Save Data
                         st.session_state.scan_history.append({
                             "crop": current_section,
                             "image": image,
