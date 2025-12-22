@@ -16,6 +16,7 @@ if 'dark_mode' not in st.session_state: st.session_state.dark_mode = True
 if 'page' not in st.session_state: st.session_state.page = 'home'
 if 'selected_crop' not in st.session_state: st.session_state.selected_crop = None
 if 'scan_history' not in st.session_state: st.session_state.scan_history = []
+if 'voice_lang' not in st.session_state: st.session_state.voice_lang = 'English'
 
 # Dynamic Colors
 if st.session_state.dark_mode:
@@ -33,11 +34,24 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA & VALIDATION ---
+# --- 3. DATA & TRANSLATIONS ---
 ALLOWED_CLASSES = {
     "Apple": ["apple_black_rot", "apple_healthy", "apple_scab"],
     "Corn": ["corn_common_rust", "corn_healthy", "corn_leaf_blight"],
     "Potato": ["potato_early_blight", "potato_healthy", "potato_late_blight"]
+}
+
+# [URDU DICTIONARY]
+URDU_MESSAGES = {
+    "Apple Black Rot": "Aap kay seb kay poday ko Black Rot ki beemari hai. Iska jald ilaaj karein.",
+    "Apple Healthy": "Mubarak ho! Aap ka seb ka poda bilkul sehat mand hai.",
+    "Apple Scab": "Khuddara tawajjo dein, aap kay poday main Scab fungus hai.",
+    "Corn Common Rust": "Makayi kay poday main Rust ki beemari payi gayi hai.",
+    "Corn Healthy": "Aap ki Makayi ki fasal bilkul theek hai.",
+    "Corn Leaf Blight": "Ye Leaf Blight hai. Is say pattay sookh saktay hain.",
+    "Potato Early Blight": "Aaloo kay poday main Early Blight kay asraat hain.",
+    "Potato Healthy": "Behtareen! Aap ka Aaloo ka poda sehat mand hai.",
+    "Potato Late Blight": "Ye Late Blight hai. Fasal ko bachaanay kay liye fori iqdaam karein."
 }
 
 KNOWLEDGE_BASE = {
@@ -51,6 +65,9 @@ KNOWLEDGE_BASE = {
     "Potato Healthy": { "disease_name": "Healthy Potato Plant", "description": "Dark green, firm leaves.", "treatment": "Keep soil moist but drained." },
     "Potato Late Blight": { "disease_name": "Potato Late Blight", "description": "Water-soaked spots turning black.", "treatment": "Remove infected plants immediately." }
 }
+
+# [TARGET PRODUCT LINK]
+DARAZ_PRODUCT_LINK = "https://www.daraz.pk/products/80-250-i161020707-s1327886846.html?c=&channelLpJumpArgs=&clickTrackInfo=query%253Aplant%252Bmedicine%253Bnid%253A161020707%253Bsrc%253ALazadaMainSrp%253Brn%253Ab527139b39060e79edd6c480bd9f8b9d%253Bregion%253Apk%253Bsku%253A161020707_PK%253Bprice%253A299%253Bclient%253Adesktop%253Bsupplier_id%253A1092256%253Bbiz_source%253Ah5_external%253Bslot%253A15%253Butlog_bucket_id%253A470687%253Basc_category_id%253A10000723%253Bitem_id%253A161020707%253Bsku_id%253A1327886846%253Bshop_id%253A203291%253BtemplateInfo%253A&freeshipping=0&fs_ab=1&fuse_fs=&lang=en&location=Punjab&price=299&priceCompare=skuId%3A1327886846%3Bsource%3Alazada-search-voucher%3Bsn%3Ab527139b39060e79edd6c480bd9f8b9d%3BoriginPrice%3A29900%3BdisplayPrice%3A29900%3BsinglePromotionId%3A-1%3BsingleToolCode%3AmockedSalePrice%3BvoucherPricePlugin%3A0%3Btimestamp%3A1766411452314&ratingscore=4.5683060109289615&request_id=b527139b39060e79edd6c480bd9f8b9d&review=183&sale=874&search=1&source=search&spm=a2a0e.searchlist.list.15&stock=1"
 
 def navigate_to(page, crop=None):
     st.session_state.page = page
@@ -77,12 +94,17 @@ def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
             g2.progress(min(i / height, 1.0))
         time.sleep(0.05)
 
-# [VOICE FUNCTION - ENGLISH ONLY]
+# [VOICE FUNCTION - ENGLISH & URDU]
 def play_voice_feedback(disease_name):
-    text_to_speak = f"Alert. {disease_name} detected."
+    lang_code = 'ur' if st.session_state.voice_lang == 'Urdu' else 'en'
+    
+    if lang_code == 'ur':
+        text_to_speak = URDU_MESSAGES.get(disease_name, "Beemari ki tashkhees ho gayi hai.")
+    else:
+        text_to_speak = f"Alert. {disease_name} detected."
+
     try:
-        # Fixed to English ('en')
-        tts = gTTS(text=text_to_speak, lang='en')
+        tts = gTTS(text=text_to_speak, lang=lang_code)
         audio_buffer = io.BytesIO()
         tts.write_to_fp(audio_buffer)
         st.audio(audio_buffer, format='audio/mp3', start_time=0)
@@ -100,6 +122,12 @@ with st.sidebar:
     if st.button("📜 History Log"):
         navigate_to('history')
         st.rerun()
+
+    st.markdown("---")
+    
+    # [VOICE SETTINGS]
+    st.subheader("🔊 Audio Settings")
+    st.session_state.voice_lang = st.radio("Voice Language:", ["English", "Urdu"], horizontal=True)
 
     st.markdown("---")
     
@@ -124,11 +152,11 @@ with st.sidebar:
         if st.session_state.dark_mode: st.session_state.dark_mode = False; st.rerun()
 
     st.success("🟢 Neural Engine Online")
-    st.caption("v4.3 - English Voice & E-Commerce")
+    st.caption("v5.0 - Final Production Build")
 
 # --- 6. HOME PAGE ---
 if st.session_state.page == 'home':
-    st.title("🌿 Leaf Disease Detection (v4.3)")
+    st.title("🌿 Leaf Disease Detection (v5.0)")
     st.subheader("① Select Your Plant System")
     col1, col2, col3 = st.columns(3)
     crops = [("🍎", "Apple"), ("🌽", "Corn"), ("🥔", "Potato")]
@@ -233,7 +261,7 @@ elif st.session_state.page == 'predict':
                             "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
                         })
                         
-                        # [PLAY AUDIO - ENGLISH]
+                        # [PLAY AUDIO]
                         play_voice_feedback(found_info['disease_name'])
 
                         with results_placeholder.container():
@@ -248,10 +276,9 @@ elif st.session_state.page == 'predict':
                             </div>
                             """, unsafe_allow_html=True)
                             
-                            # [BUY MEDICINE BUTTON]
+                            # [SPECIFIC DARAZ LINK]
                             st.write("")
-                            daraz_url = f"https://www.daraz.pk/catalog/?q={found_info['treatment'].split(',')[0]} fungicide"
-                            st.link_button("🛒 Buy Medicine (Daraz.pk)", daraz_url)
+                            st.link_button("🛒 Buy Medicine (Daraz.pk)", DARAZ_PRODUCT_LINK)
 
                     else:
                         st.warning(f"Detected: {prediction_key} (No DB Info)")
