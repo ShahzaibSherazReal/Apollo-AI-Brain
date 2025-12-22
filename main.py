@@ -29,7 +29,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA & STRICT VALIDATION LISTS ---
+# --- 3. DATA & VALIDATION ---
 ALLOWED_CLASSES = {
     "Apple": ["apple_black_rot", "apple_healthy", "apple_scab"],
     "Corn": ["corn_common_rust", "corn_healthy", "corn_leaf_blight"],
@@ -73,35 +73,54 @@ def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
             g2.progress(min(i / height, 1.0))
         time.sleep(0.05)
 
-# --- 5. SIDEBAR (NEW FEATURES ADDED) ---
+# --- 5. SIDEBAR (UPDATED) ---
 with st.sidebar:
     st.title("Leaf Disease Detection")
     
-    # [NEW FEATURE 1] Home Button
+    # 🏠 Home Button
     if st.button("🏠 Return Home"):
         navigate_to('home')
         st.rerun()
 
     st.markdown("---")
+    
+    # 🌱 Gardening Tips
+    with st.expander("🌱 Tips for Gardening"):
+        st.markdown("""
+        * **Watering:** Water early in the morning to prevent evaporation.
+        * **Soil:** Ensure good drainage to avoid root rot.
+        * **Sunlight:** Most vegetables need at least 6 hours of direct sun.
+        * **Spacing:** Don't crowd plants; air circulation prevents fungus.
+        """)
+
+    # 🎯 About Us
+    with st.expander("🎯 About Us"):
+        st.write("Our goal is to bridge the gap between advanced technology and agriculture. We aim to empower farmers with instant, offline disease detection tools to save crops and increase yield.")
+
+    # 📖 Our Story (Iqra University)
+    with st.expander("📖 Our Story"):
+        st.write("""
+        We are a team of dedicated students from **Iqra University North Campus**.
+        
+        This application was built as our project to tackle real-world agricultural challenges. By combining MobileNet architecture with Flutter, we created a solution that works right in the field.
+        """)
+        
+    st.markdown("---")
+    
+    # Settings & Status
     st.subheader("Settings")
     if st.toggle("🌙 Dark Mode", value=st.session_state.dark_mode):
         if not st.session_state.dark_mode: st.session_state.dark_mode = True; st.rerun()
     else:
         if st.session_state.dark_mode: st.session_state.dark_mode = False; st.rerun()
-    
-    st.markdown("---")
-    
-    # [NEW FEATURE 2] About Section
-    with st.expander("ℹ️ About This App"):
-        st.caption("This application uses a MobileNetV2 Neural Network to detect plant diseases in real-time.")
-        st.caption("Supported Crops: Apple, Corn, Potato.")
-        st.caption("Version: 3.2 (Stable)")
 
+    st.markdown("---")
     st.success("🟢 Neural Engine Online")
+    st.caption("v3.3 - IQRA North Campus Edition")
 
 # --- 6. HOME PAGE ---
 if st.session_state.page == 'home':
-    st.title("🌿 Leaf Disease Detection (v3.2)")
+    st.title("🌿 Leaf Disease Detection (v3.3)")
     st.subheader("① Select Your Plant System")
     col1, col2, col3 = st.columns(3)
     crops = [("🍎", "Apple"), ("🌽", "Corn"), ("🥔", "Potato")]
@@ -110,7 +129,6 @@ if st.session_state.page == 'home':
             with st.container(border=True):
                 st.markdown(f"<h1 style='text-align:center;'>{emoji}</h1><h3 style='text-align:center;'>{name}</h3>", unsafe_allow_html=True)
                 if st.button(f"Select {name}", key=f"btn_{name}"): navigate_to('predict', name)
-    st.caption("🚀 v3.2 Update: Sidebar Navigation Added")
 
 # --- 7. PREDICTION PAGE ---
 elif st.session_state.page == 'predict':
@@ -148,6 +166,7 @@ elif st.session_state.page == 'predict':
                 current_section = st.session_state.selected_crop
                 valid_keys = ALLOWED_CLASSES.get(current_section, [])
 
+                # 1. Strict Mismatch Check
                 if prediction_key not in valid_keys:
                     with results_placeholder.container():
                         st.error("⚠️ WRONG LEAF DETECTED")
@@ -161,6 +180,7 @@ elif st.session_state.page == 'predict':
                         </div>
                         """, unsafe_allow_html=True)
                 
+                # 2. Low Confidence Check (Sensitivity set to 20%)
                 elif confidence_val < 20.0:
                     with results_placeholder.container():
                         st.warning(f"⚠️ Low Confidence Alert ({confidence_val}%)")
@@ -171,6 +191,7 @@ elif st.session_state.page == 'predict':
                         </div>
                         """, unsafe_allow_html=True)
 
+                # 3. Success
                 else:
                     clean_name = prediction_key.replace("_", " ").lower()
                     found_info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
