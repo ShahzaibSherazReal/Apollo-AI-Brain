@@ -2,6 +2,7 @@ import streamlit as st
 from PIL import Image, ImageDraw
 import time
 import random
+import datetime
 import numpy as np
 from utils.ai_brain import predict_disease
 
@@ -12,6 +13,10 @@ st.set_page_config(page_title="Leaf Disease Detection", page_icon="🌿", layout
 if 'dark_mode' not in st.session_state: st.session_state.dark_mode = True
 if 'page' not in st.session_state: st.session_state.page = 'home'
 if 'selected_crop' not in st.session_state: st.session_state.selected_crop = None
+
+# [NEW] Initialize History Memory
+if 'scan_history' not in st.session_state: 
+    st.session_state.scan_history = []
 
 # Dynamic Colors
 if st.session_state.dark_mode:
@@ -73,18 +78,21 @@ def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
             g2.progress(min(i / height, 1.0))
         time.sleep(0.05)
 
-# --- 5. SIDEBAR (UPDATED) ---
+# --- 5. SIDEBAR ---
 with st.sidebar:
     st.title("Leaf Disease Detection")
     
-    # 🏠 Home Button
     if st.button("🏠 Return Home"):
         navigate_to('home')
         st.rerun()
 
+    # [NEW] History Button
+    if st.button("📜 History Log"):
+        navigate_to('history')
+        st.rerun()
+
     st.markdown("---")
     
-    # 🌱 Gardening Tips
     with st.expander("🌱 Tips for Gardening"):
         st.markdown("""
         * **Watering:** Water early in the morning to prevent evaporation.
@@ -93,21 +101,16 @@ with st.sidebar:
         * **Spacing:** Don't crowd plants; air circulation prevents fungus.
         """)
 
-    # 🎯 About Us
     with st.expander("🎯 About Us"):
         st.write("Our goal is to bridge the gap between advanced technology and agriculture. We aim to empower farmers with instant, offline disease detection tools to save crops and increase yield.")
 
-    # 📖 Our Story (Iqra University)
     with st.expander("📖 Our Story"):
         st.write("""
         We are a team of dedicated students from **Iqra University North Campus**.
-        
         This application was built as our project to tackle real-world agricultural challenges. By combining MobileNet architecture with Flutter, we created a solution that works right in the field.
         """)
         
     st.markdown("---")
-    
-    # Settings & Status
     st.subheader("Settings")
     if st.toggle("🌙 Dark Mode", value=st.session_state.dark_mode):
         if not st.session_state.dark_mode: st.session_state.dark_mode = True; st.rerun()
@@ -116,11 +119,11 @@ with st.sidebar:
 
     st.markdown("---")
     st.success("🟢 Neural Engine Online")
-    st.caption("v3.3 - IQRA North Campus Edition")
+    st.caption("v4.0 - History Module Active")
 
 # --- 6. HOME PAGE ---
 if st.session_state.page == 'home':
-    st.title("🌿 Leaf Disease Detection (v3.3)")
+    st.title("🌿 Leaf Disease Detection (v4.0)")
     st.subheader("① Select Your Plant System")
     col1, col2, col3 = st.columns(3)
     crops = [("🍎", "Apple"), ("🌽", "Corn"), ("🥔", "Potato")]
@@ -130,7 +133,35 @@ if st.session_state.page == 'home':
                 st.markdown(f"<h1 style='text-align:center;'>{emoji}</h1><h3 style='text-align:center;'>{name}</h3>", unsafe_allow_html=True)
                 if st.button(f"Select {name}", key=f"btn_{name}"): navigate_to('predict', name)
 
-# --- 7. PREDICTION PAGE ---
+# --- 7. HISTORY PAGE [NEW SECTION] ---
+elif st.session_state.page == 'history':
+    st.title("📜 Scan Log")
+    
+    # 7.1 Filter Selection
+    filter_col, _ = st.columns([1, 3])
+    with filter_col:
+        filter_option = st.selectbox("Filter by Crop History:", ["All", "Apple", "Corn", "Potato"])
+
+    st.markdown("---")
+
+    # 7.2 Logic to show history
+    if not st.session_state.scan_history:
+        st.info("No scans recorded yet. Go to Home and perform a scan.")
+    else:
+        # Loop through history backwards (newest first)
+        for scan in reversed(st.session_state.scan_history):
+            # Apply Filter
+            if filter_option == "All" or scan['crop'] == filter_option:
+                with st.container(border=True):
+                    c1, c2 = st.columns([1, 3])
+                    with c1:
+                        st.image(scan['image'], width=150, caption=scan['timestamp'])
+                    with c2:
+                        st.subheader(f"{scan['disease_name']}")
+                        st.caption(f"Crop: {scan['crop']} | Confidence: {scan['confidence']}%")
+                        st.write(f"**💊 Cure:** {scan['treatment']}")
+
+# --- 8. PREDICTION PAGE ---
 elif st.session_state.page == 'predict':
     col_back, col_title = st.columns([1, 8])
     with col_back:
@@ -170,35 +201,32 @@ elif st.session_state.page == 'predict':
                 if prediction_key not in valid_keys:
                     with results_placeholder.container():
                         st.error("⚠️ WRONG LEAF DETECTED")
-                        st.markdown(f"""
-                        <div style="background-color: #3d0000; padding: 15px; border: 1px solid #ff4444; border-radius: 10px;">
-                            <h3 style="color: #ff4444 !important; margin:0;">Analysis Rejected</h3>
-                            <p>You are in the <strong>{current_section}</strong> laboratory.</p>
-                            <p>But the Neural Engine detected: <strong>{prediction_key.replace('_', ' ').upper()}</strong></p>
-                            <hr style="border-color: #555;">
-                            <p style="color: #bbb;">Please return to home and select the correct crop.</p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.markdown(f"Analysis Rejected. Expected {current_section}, got {prediction_key.replace('_',' ')}.")
                 
-                # 2. Low Confidence Check (Sensitivity set to 20%)
+                # 2. Low Confidence Check
                 elif confidence_val < 20.0:
                     with results_placeholder.container():
                         st.warning(f"⚠️ Low Confidence Alert ({confidence_val}%)")
-                        st.markdown(f"""
-                        <div style="background-color: {card_bg}; padding: 15px; border-radius: 10px; border: 1px solid #FFA500;">
-                            <h3 style="color: #FFA500 !important;">Unclear Image</h3>
-                            <p>The AI is only {confidence_val}% sure.</p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.info("Image unclear.")
 
-                # 3. Success
+                # 3. Success & SAVE TO HISTORY [UPDATED]
                 else:
                     clean_name = prediction_key.replace("_", " ").lower()
                     found_info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
                     
-                    with results_placeholder.container():
-                        if found_info:
-                            st.toast("Match Found", icon="✅")
+                    if found_info:
+                        # --- [NEW] SAVE TO HISTORY ---
+                        st.session_state.scan_history.append({
+                            "crop": current_section,
+                            "image": image,
+                            "disease_name": found_info['disease_name'],
+                            "confidence": confidence_val,
+                            "treatment": found_info['treatment'],
+                            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                        })
+                        
+                        with results_placeholder.container():
+                            st.toast("Result Saved to History", icon="💾")
                             st.markdown(f"""
                             <div style="background-color: {card_bg}; padding: 20px; border-radius: 10px; border: 1px solid #4CAF50;">
                                 <h2 style="color: #4CAF50 !important; margin:0;">{found_info['disease_name']}</h2>
@@ -208,5 +236,5 @@ elif st.session_state.page == 'predict':
                                 <p><strong>Treatment:</strong> {found_info['treatment']}</p>
                             </div>
                             """, unsafe_allow_html=True)
-                        else:
-                            st.warning(f"Detected: {prediction_key} (No DB Info)")
+                    else:
+                        st.warning(f"Detected: {prediction_key} (No DB Info)")
