@@ -4,7 +4,7 @@ import time
 import random
 import datetime
 import numpy as np
-from gtts import gTTS  # [NEW] Library for Voice
+from gtts import gTTS  # Library for Voice
 import io
 from utils.ai_brain import predict_disease
 
@@ -16,8 +16,6 @@ if 'dark_mode' not in st.session_state: st.session_state.dark_mode = True
 if 'page' not in st.session_state: st.session_state.page = 'home'
 if 'selected_crop' not in st.session_state: st.session_state.selected_crop = None
 if 'scan_history' not in st.session_state: st.session_state.scan_history = []
-# [NEW] Voice Settings
-if 'voice_lang' not in st.session_state: st.session_state.voice_lang = 'English'
 
 # Dynamic Colors
 if st.session_state.dark_mode:
@@ -35,24 +33,11 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA, TRANSLATIONS & VALIDATION ---
+# --- 3. DATA & VALIDATION ---
 ALLOWED_CLASSES = {
     "Apple": ["apple_black_rot", "apple_healthy", "apple_scab"],
     "Corn": ["corn_common_rust", "corn_healthy", "corn_leaf_blight"],
     "Potato": ["potato_early_blight", "potato_healthy", "potato_late_blight"]
-}
-
-# [NEW] Urdu Translations for Voice
-URDU_MESSAGES = {
-    "Apple Black Rot": "Aap kay seb kay poday ko Black Rot ki beemari hai. Iska jald ilaaj karein.",
-    "Apple Healthy": "Mubarak ho! Aap ka seb ka poda bilkul sehat mand hai.",
-    "Apple Scab": "Khuddara tawajjo dein, aap kay poday main Scab fungus hai.",
-    "Corn Common Rust": "Makayi kay poday main Rust ki beemari payi gayi hai.",
-    "Corn Healthy": "Aap ki Makayi ki fasal bilkul theek hai.",
-    "Corn Leaf Blight": "Ye Leaf Blight hai. Is say pattay sookh saktay hain.",
-    "Potato Early Blight": "Aaloo kay poday main Early Blight kay asraat hain.",
-    "Potato Healthy": "Behtareen! Aap ka Aaloo ka poda sehat mand hai.",
-    "Potato Late Blight": "Ye Late Blight hai. Fasal ko bachaanay kay liye fori iqdaam karein."
 }
 
 KNOWLEDGE_BASE = {
@@ -92,17 +77,12 @@ def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
             g2.progress(min(i / height, 1.0))
         time.sleep(0.05)
 
-# [NEW] Text to Speech Function
+# [VOICE FUNCTION - ENGLISH ONLY]
 def play_voice_feedback(disease_name):
-    lang_code = 'ur' if st.session_state.voice_lang == 'Urdu' else 'en'
-    
-    if lang_code == 'ur':
-        text_to_speak = URDU_MESSAGES.get(disease_name, "Beemari ki tashkhees ho gayi hai.")
-    else:
-        text_to_speak = f"Alert. {disease_name} detected."
-
+    text_to_speak = f"Alert. {disease_name} detected."
     try:
-        tts = gTTS(text=text_to_speak, lang=lang_code)
+        # Fixed to English ('en')
+        tts = gTTS(text=text_to_speak, lang='en')
         audio_buffer = io.BytesIO()
         tts.write_to_fp(audio_buffer)
         st.audio(audio_buffer, format='audio/mp3', start_time=0)
@@ -120,12 +100,6 @@ with st.sidebar:
     if st.button("📜 History Log"):
         navigate_to('history')
         st.rerun()
-
-    st.markdown("---")
-    
-    # [NEW] Voice Settings
-    st.subheader("🔊 Audio Settings")
-    st.session_state.voice_lang = st.radio("Voice Language:", ["English", "Urdu"], horizontal=True)
 
     st.markdown("---")
     
@@ -150,11 +124,11 @@ with st.sidebar:
         if st.session_state.dark_mode: st.session_state.dark_mode = False; st.rerun()
 
     st.success("🟢 Neural Engine Online")
-    st.caption("v4.2 - Voice & E-Commerce")
+    st.caption("v4.3 - English Voice & E-Commerce")
 
 # --- 6. HOME PAGE ---
 if st.session_state.page == 'home':
-    st.title("🌿 Leaf Disease Detection (v4.2)")
+    st.title("🌿 Leaf Disease Detection (v4.3)")
     st.subheader("① Select Your Plant System")
     col1, col2, col3 = st.columns(3)
     crops = [("🍎", "Apple"), ("🌽", "Corn"), ("🥔", "Potato")]
@@ -259,7 +233,7 @@ elif st.session_state.page == 'predict':
                             "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
                         })
                         
-                        # [NEW] Play Audio
+                        # [PLAY AUDIO - ENGLISH]
                         play_voice_feedback(found_info['disease_name'])
 
                         with results_placeholder.container():
@@ -274,7 +248,7 @@ elif st.session_state.page == 'predict':
                             </div>
                             """, unsafe_allow_html=True)
                             
-                            # [NEW] Buy Medicine Button
+                            # [BUY MEDICINE BUTTON]
                             st.write("")
                             daraz_url = f"https://www.daraz.pk/catalog/?q={found_info['treatment'].split(',')[0]} fungicide"
                             st.link_button("🛒 Buy Medicine (Daraz.pk)", daraz_url)
