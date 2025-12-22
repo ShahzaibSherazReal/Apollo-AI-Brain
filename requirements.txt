@@ -5,3 +5,4 @@ pillow
 streamlit-lottie
 requests
 h5py
+gTTS
