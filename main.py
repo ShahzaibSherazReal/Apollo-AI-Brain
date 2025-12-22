@@ -4,6 +4,8 @@ import time
 import random
 import datetime
 import numpy as np
+from gtts import gTTS  # [NEW] Library for Voice
+import io
 from utils.ai_brain import predict_disease
 
 # --- 1. CONFIGURATION ---
@@ -13,10 +15,9 @@ st.set_page_config(page_title="Leaf Disease Detection", page_icon="🌿", layout
 if 'dark_mode' not in st.session_state: st.session_state.dark_mode = True
 if 'page' not in st.session_state: st.session_state.page = 'home'
 if 'selected_crop' not in st.session_state: st.session_state.selected_crop = None
-
-# Initialize History Memory
-if 'scan_history' not in st.session_state: 
-    st.session_state.scan_history = []
+if 'scan_history' not in st.session_state: st.session_state.scan_history = []
+# [NEW] Voice Settings
+if 'voice_lang' not in st.session_state: st.session_state.voice_lang = 'English'
 
 # Dynamic Colors
 if st.session_state.dark_mode:
@@ -34,11 +35,24 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA & VALIDATION ---
+# --- 3. DATA, TRANSLATIONS & VALIDATION ---
 ALLOWED_CLASSES = {
     "Apple": ["apple_black_rot", "apple_healthy", "apple_scab"],
     "Corn": ["corn_common_rust", "corn_healthy", "corn_leaf_blight"],
     "Potato": ["potato_early_blight", "potato_healthy", "potato_late_blight"]
+}
+
+# [NEW] Urdu Translations for Voice
+URDU_MESSAGES = {
+    "Apple Black Rot": "Aap kay seb kay poday ko Black Rot ki beemari hai. Iska jald ilaaj karein.",
+    "Apple Healthy": "Mubarak ho! Aap ka seb ka poda bilkul sehat mand hai.",
+    "Apple Scab": "Khuddara tawajjo dein, aap kay poday main Scab fungus hai.",
+    "Corn Common Rust": "Makayi kay poday main Rust ki beemari payi gayi hai.",
+    "Corn Healthy": "Aap ki Makayi ki fasal bilkul theek hai.",
+    "Corn Leaf Blight": "Ye Leaf Blight hai. Is say pattay sookh saktay hain.",
+    "Potato Early Blight": "Aaloo kay poday main Early Blight kay asraat hain.",
+    "Potato Healthy": "Behtareen! Aap ka Aaloo ka poda sehat mand hai.",
+    "Potato Late Blight": "Ye Late Blight hai. Fasal ko bachaanay kay liye fori iqdaam karein."
 }
 
 KNOWLEDGE_BASE = {
@@ -57,7 +71,7 @@ def navigate_to(page, crop=None):
     st.session_state.page = page
     st.session_state.selected_crop = crop
 
-# --- 4. ANIMATION ---
+# --- 4. HELPER FUNCTIONS ---
 def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
     img = original_img.copy().convert("RGBA")
     width, height = img.size
@@ -78,6 +92,23 @@ def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
             g2.progress(min(i / height, 1.0))
         time.sleep(0.05)
 
+# [NEW] Text to Speech Function
+def play_voice_feedback(disease_name):
+    lang_code = 'ur' if st.session_state.voice_lang == 'Urdu' else 'en'
+    
+    if lang_code == 'ur':
+        text_to_speak = URDU_MESSAGES.get(disease_name, "Beemari ki tashkhees ho gayi hai.")
+    else:
+        text_to_speak = f"Alert. {disease_name} detected."
+
+    try:
+        tts = gTTS(text=text_to_speak, lang=lang_code)
+        audio_buffer = io.BytesIO()
+        tts.write_to_fp(audio_buffer)
+        st.audio(audio_buffer, format='audio/mp3', start_time=0)
+    except Exception as e:
+        st.warning("⚠️ Audio unavailable (No Internet?)")
+
 # --- 5. SIDEBAR ---
 with st.sidebar:
     st.title("Leaf Disease Detection")
@@ -92,22 +123,24 @@ with st.sidebar:
 
     st.markdown("---")
     
+    # [NEW] Voice Settings
+    st.subheader("🔊 Audio Settings")
+    st.session_state.voice_lang = st.radio("Voice Language:", ["English", "Urdu"], horizontal=True)
+
+    st.markdown("---")
+    
     with st.expander("🌱 Tips for Gardening"):
         st.markdown("""
-        * **Watering:** Water early in the morning to prevent evaporation.
-        * **Soil:** Ensure good drainage to avoid root rot.
-        * **Sunlight:** Most vegetables need at least 6 hours of direct sun.
-        * **Spacing:** Don't crowd plants; air circulation prevents fungus.
+        * **Watering:** Water early in the morning.
+        * **Soil:** Ensure good drainage.
+        * **Sunlight:** At least 6 hours direct sun.
         """)
 
     with st.expander("🎯 About Us"):
-        st.write("Our goal is to bridge the gap between advanced technology and agriculture. We aim to empower farmers with instant, offline disease detection tools to save crops and increase yield.")
+        st.write("Bridging AI & Agriculture. Empowering farmers with instant diagnostics.")
 
     with st.expander("📖 Our Story"):
-        st.write("""
-        We are a team of dedicated students from **Iqra University North Campus**.
-        This application was built as our project to tackle real-world agricultural challenges. By combining MobileNet architecture with Flutter, we created a solution that works right in the field.
-        """)
+        st.write("Built by students of **Iqra University North Campus** to tackle agricultural challenges using MobileNet & Flutter.")
         
     st.markdown("---")
     st.subheader("Settings")
@@ -116,13 +149,12 @@ with st.sidebar:
     else:
         if st.session_state.dark_mode: st.session_state.dark_mode = False; st.rerun()
 
-    st.markdown("---")
     st.success("🟢 Neural Engine Online")
-    st.caption("v4.1 - Full History Management")
+    st.caption("v4.2 - Voice & E-Commerce")
 
 # --- 6. HOME PAGE ---
 if st.session_state.page == 'home':
-    st.title("🌿 Leaf Disease Detection (v4.1)")
+    st.title("🌿 Leaf Disease Detection (v4.2)")
     st.subheader("① Select Your Plant System")
     col1, col2, col3 = st.columns(3)
     crops = [("🍎", "Apple"), ("🌽", "Corn"), ("🥔", "Potato")]
@@ -132,80 +164,43 @@ if st.session_state.page == 'home':
                 st.markdown(f"<h1 style='text-align:center;'>{emoji}</h1><h3 style='text-align:center;'>{name}</h3>", unsafe_allow_html=True)
                 if st.button(f"Select {name}", key=f"btn_{name}"): navigate_to('predict', name)
 
-# --- 7. HISTORY PAGE [UPDATED] ---
+# --- 7. HISTORY PAGE ---
 elif st.session_state.page == 'history':
     st.title("📜 Scan Log")
-    
-    # 7.1 Filter & Controls
     col_filter1, col_filter2, col_action = st.columns([2, 2, 2])
-    
-    with col_filter1:
-        # Filter by Crop
-        filter_crop = st.selectbox("Filter by Crop:", ["All", "Apple", "Corn", "Potato"])
-    
+    with col_filter1: filter_crop = st.selectbox("Filter by Crop:", ["All", "Apple", "Corn", "Potato"])
     with col_filter2:
-        # Filter by Date (Calendar)
         use_date = st.toggle("Filter by Date")
-        if use_date:
-            filter_date = st.date_input("Select Date", datetime.date.today())
-        else:
-            filter_date = None
-
+        filter_date = st.date_input("Select Date", datetime.date.today()) if use_date else None
     with col_action:
-        # Delete All Button
-        st.write("") # Spacer
+        st.write("")
         if st.button("🗑️ Clear All History", type="primary"):
-            st.session_state.scan_history = []
-            st.rerun()
+            st.session_state.scan_history = []; st.rerun()
 
     st.markdown("---")
 
-    # 7.2 Display History
     if not st.session_state.scan_history:
-        st.info("No scans recorded yet. Go to Home and perform a scan.")
+        st.info("No scans recorded yet.")
     else:
-        # We iterate through the original list with index (enumerate)
-        # We reverse it to show newest first, but keep original indices for deletion
-        # This requires a bit of logic:
-        
-        # 1. Create a list of items to display (matching filters)
         display_items = []
         for index, item in enumerate(st.session_state.scan_history):
-            # Check Crop Filter
-            if filter_crop != "All" and item['crop'] != filter_crop:
-                continue
-            # Check Date Filter
+            if filter_crop != "All" and item['crop'] != filter_crop: continue
             if filter_date:
-                item_date = item['timestamp'].split(" ")[0] # Extract "2025-12-22"
-                if item_date != str(filter_date):
-                    continue
-            display_items.append((index, item)) # Store (Original_Index, Data)
+                if item['timestamp'].split(" ")[0] != str(filter_date): continue
+            display_items.append((index, item))
 
-        # 2. Show Items (Newest First)
-        if not display_items:
-            st.warning("No records found for this date/crop.")
-        
         for original_index, scan in reversed(display_items):
             with st.container(border=True):
                 c1, c2, c3 = st.columns([1, 4, 1])
-                
-                # Image
-                with c1:
-                    st.image(scan['image'], width=100)
-                
-                # Info
+                with c1: st.image(scan['image'], width=100)
                 with c2:
                     st.subheader(f"{scan['disease_name']}")
                     st.caption(f"📅 {scan['timestamp']} | Crop: {scan['crop']}")
                     st.write(f"**💊 Cure:** {scan['treatment']}")
-                
-                # Delete Button
                 with c3:
-                    st.write("") # Spacer
-                    # Unique key is essential here!
+                    st.write("")
                     if st.button("🗑️", key=f"del_{original_index}"):
-                        st.session_state.scan_history.pop(original_index)
-                        st.rerun() # Refresh immediately to update list
+                        st.session_state.scan_history.pop(original_index); st.rerun()
 
 # --- 8. PREDICTION PAGE ---
 elif st.session_state.page == 'predict':
@@ -239,40 +234,36 @@ elif st.session_state.page == 'predict':
                 prediction_key = result["class"]
                 confidence_str = result["confidence"].replace('%', '')
                 confidence_val = float(confidence_str)
-                
                 current_section = st.session_state.selected_crop
                 valid_keys = ALLOWED_CLASSES.get(current_section, [])
 
-                # 1. Strict Mismatch Check
                 if prediction_key not in valid_keys:
                     with results_placeholder.container():
                         st.error("⚠️ WRONG LEAF DETECTED")
                         st.markdown(f"Analysis Rejected. Expected {current_section}, got {prediction_key.replace('_',' ')}.")
                 
-                # 2. Low Confidence Check
                 elif confidence_val < 20.0:
                     with results_placeholder.container():
                         st.warning(f"⚠️ Low Confidence Alert ({confidence_val}%)")
                         st.info("Image unclear.")
 
-                # 3. Success & SAVE TO HISTORY
                 else:
                     clean_name = prediction_key.replace("_", " ").lower()
                     found_info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
                     
                     if found_info:
-                        # Save Data
+                        # Save History
                         st.session_state.scan_history.append({
-                            "crop": current_section,
-                            "image": image,
-                            "disease_name": found_info['disease_name'],
-                            "confidence": confidence_val,
-                            "treatment": found_info['treatment'],
+                            "crop": current_section, "image": image, "disease_name": found_info['disease_name'],
+                            "confidence": confidence_val, "treatment": found_info['treatment'],
                             "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
                         })
                         
+                        # [NEW] Play Audio
+                        play_voice_feedback(found_info['disease_name'])
+
                         with results_placeholder.container():
-                            st.toast("Result Saved to History", icon="💾")
+                            st.toast("Match Found", icon="✅")
                             st.markdown(f"""
                             <div style="background-color: {card_bg}; padding: 20px; border-radius: 10px; border: 1px solid #4CAF50;">
                                 <h2 style="color: #4CAF50 !important; margin:0;">{found_info['disease_name']}</h2>
@@ -282,5 +273,11 @@ elif st.session_state.page == 'predict':
                                 <p><strong>Treatment:</strong> {found_info['treatment']}</p>
                             </div>
                             """, unsafe_allow_html=True)
+                            
+                            # [NEW] Buy Medicine Button
+                            st.write("")
+                            daraz_url = f"https://www.daraz.pk/catalog/?q={found_info['treatment'].split(',')[0]} fungicide"
+                            st.link_button("🛒 Buy Medicine (Daraz.pk)", daraz_url)
+
                     else:
                         st.warning(f"Detected: {prediction_key} (No DB Info)")
