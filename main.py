@@ -6,17 +6,40 @@ import datetime
 import numpy as np
 from gtts import gTTS  # Library for Voice
 import io
+import pickle  # <--- NEW: For saving history
+import os      # <--- NEW: For checking file existence
 from utils.ai_brain import predict_disease
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Leaf Disease Detection", page_icon="🌿", layout="wide")
 
+# --- HISTORY PERSISTENCE HELPER FUNCTIONS ---
+HISTORY_FILE = "scan_history.pkl"
+
+def load_history():
+    """Loads history from the pickle file if it exists."""
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "rb") as f:
+                return pickle.load(f)
+        except:
+            return []  # Return empty if file is corrupt
+    return []
+
+def save_history(history_list):
+    """Saves the current history list to a pickle file."""
+    with open(HISTORY_FILE, "wb") as f:
+        pickle.dump(history_list, f)
+
 # --- 2. SESSION STATE & THEME ---
 if 'dark_mode' not in st.session_state: st.session_state.dark_mode = True
 if 'page' not in st.session_state: st.session_state.page = 'home'
 if 'selected_crop' not in st.session_state: st.session_state.selected_crop = None
-if 'scan_history' not in st.session_state: st.session_state.scan_history = []
 if 'voice_lang' not in st.session_state: st.session_state.voice_lang = 'English'
+
+# Initialize Scan History (Load from file instead of empty list)
+if 'scan_history' not in st.session_state: 
+    st.session_state.scan_history = load_history()
 
 # Dynamic Colors
 if st.session_state.dark_mode:
@@ -177,7 +200,9 @@ elif st.session_state.page == 'history':
     with col_action:
         st.write("")
         if st.button("🗑️ Clear All History", type="primary"):
-            st.session_state.scan_history = []; st.rerun()
+            st.session_state.scan_history = []
+            save_history([])  # <--- SAVE EMPTY HISTORY
+            st.rerun()
 
     st.markdown("---")
 
@@ -202,7 +227,9 @@ elif st.session_state.page == 'history':
                 with c3:
                     st.write("")
                     if st.button("🗑️", key=f"del_{original_index}"):
-                        st.session_state.scan_history.pop(original_index); st.rerun()
+                        st.session_state.scan_history.pop(original_index)
+                        save_history(st.session_state.scan_history)  # <--- SAVE UPDATED HISTORY
+                        st.rerun()
 
 # --- 8. PREDICTION PAGE ---
 elif st.session_state.page == 'predict':
@@ -260,6 +287,7 @@ elif st.session_state.page == 'predict':
                             "confidence": confidence_val, "treatment": found_info['treatment'],
                             "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
                         })
+                        save_history(st.session_state.scan_history)  # <--- SAVE NEW SCAN IMMEDIATELY
                         
                         # [PLAY AUDIO]
                         play_voice_feedback(found_info['disease_name'])
