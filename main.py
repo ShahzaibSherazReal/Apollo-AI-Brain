@@ -9,6 +9,7 @@ import io
 import os
 import json
 import hashlib
+import base64
 from utils.ai_brain import predict_disease
 
 # --- 1. CONFIGURATION ---
@@ -33,6 +34,17 @@ def save_data(file, data):
 
 def hash_password(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
+
+# --- IMAGE CONVERSION HELPERS ---
+def img_to_base64(image):
+    """Converts PIL Image to Base64 string for JSON storage"""
+    buffered = io.BytesIO()
+    image.save(buffered, format="JPEG")
+    return base64.b64encode(buffered.getvalue()).decode()
+
+def base64_to_img(base64_str):
+    """Converts Base64 string back to PIL Image"""
+    return Image.open(io.BytesIO(base64.b64decode(base64_str)))
 
 users_db = load_data(USERS_FILE, {})
 history_db = load_data(HISTORY_FILE, {})
@@ -107,9 +119,9 @@ def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
         draw = ImageDraw.Draw(frame)
         scan_y = i if i < height else height - 1
         draw.line([(0, scan_y), (width, scan_y)], fill=(0, 255, 0, 200), width=5)
-        # Update the LEFT image in place
+        # Animate the LEFT placeholder
         image_placeholder.image(frame, caption="🔍 ANALYZING...", use_container_width=True)
-        # Show graph on RIGHT side
+        # Graph on RIGHT
         with graph_placeholder.container():
             g1, g2 = st.columns(2)
             g1.line_chart([random.randint(10, 100) for _ in range(20)], height=100)
@@ -210,7 +222,7 @@ def main_app():
             st.rerun()
         st.session_state.voice_lang = st.radio("Voice Language:", ["English", "Urdu"], horizontal=True)
 
-    # --- HOME TAB LOGIC ---
+    # --- HOME TAB ---
     if menu == "🏠 Home":
         
         if st.session_state.internal_page == 'home':
@@ -249,34 +261,26 @@ def main_app():
             uploaded_file = st.file_uploader(f"Upload {current_crop} Leaf", type=['jpg','png','jpeg'])
             
             if uploaded_file:
-                # --- NEW LAYOUT: LEFT = IMG+BTN, RIGHT = RESULTS ---
+                # LAYOUT: Image Left, Results Right
                 col_left, col_right = st.columns([1, 1])
                 
                 image = Image.open(uploaded_file)
                 
                 with col_left:
-                    # 1. Image Placeholder (We will animate THIS one)
                     scan_img_placeholder = st.empty()
                     scan_img_placeholder.image(image, caption="Specimen", use_container_width=True)
-                    
-                    st.write("") # Spacer
-                    # 2. Button strictly UNDER the image
+                    st.write("")
                     scan_btn = st.button("INITIATE DEEP SCAN", type="primary", use_container_width=True)
 
                 with col_right:
-                    # 3. Right side placeholders for Graphs & Results
                     graph_placeholder = st.empty()
                     results_placeholder = st.empty()
 
                 if scan_btn:
-                    # ANIMATION: Update the LEFT placeholder, show graph on RIGHT
                     heavy_duty_scan(scan_img_placeholder, graph_placeholder, image)
-                    
-                    # RESET: Put the original clear image back on LEFT
                     scan_img_placeholder.image(image, caption="Specimen", use_container_width=True)
-                    graph_placeholder.empty() # Clear the graphs to make room for results
+                    graph_placeholder.empty()
                     
-                    # PREDICTION
                     result = predict_disease(image)
                     
                     if "error" in result:
@@ -287,7 +291,6 @@ def main_app():
                         clean_name = pred_class.replace("_", " ").lower()
                         info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
                         
-                        # DISPLAY RESULTS ON RIGHT SIDE
                         with results_placeholder.container():
                             if info:
                                 st.success(f"Result: {info['disease_name']}")
@@ -302,17 +305,21 @@ def main_app():
                                 """, unsafe_allow_html=True)
                                 st.link_button("🛒 Buy Medicine (Daraz.pk)", DARAZ_LINK)
                                 st.write("---")
-                                # AUDIO AT THE BOTTOM
                                 play_audio(info['disease_name'])
                                 
-                                # Save History
+                                # SAVE HISTORY WITH IMAGE
                                 user = st.session_state.user
                                 if user not in history_db: history_db[user] = []
+                                
+                                # Convert Image to Base64 String
+                                img_str = img_to_base64(image)
+                                
                                 history_db[user].append({
                                     "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                                     "crop": current_crop,
                                     "disease": info['disease_name'],
-                                    "treatment": info['treatment']
+                                    "treatment": info['treatment'],
+                                    "image": img_str  # <--- SAVING IMAGE HERE
                                 })
                                 save_data(HISTORY_FILE, history_db)
                             else:
@@ -346,11 +353,24 @@ def main_app():
 
             for item in reversed(display_items):
                 with st.container(border=True):
-                    c1, c2 = st.columns([3, 1])
-                    c1.subheader(item['disease'])
-                    c1.write(f"**Cure:** {item['treatment']}")
-                    c2.caption(f"{item['timestamp']}")
-                    c2.caption(f"Crop: {item['crop']}")
+                    # NEW LAYOUT: Image on Left, Text on Right
+                    c_img, c_text = st.columns([1, 4])
+                    
+                    with c_img:
+                        if "image" in item:
+                            try:
+                                # Convert text back to image
+                                recovered_img = base64_to_img(item["image"])
+                                st.image(recovered_img, use_container_width=True)
+                            except:
+                                st.error("Img Error")
+                        else:
+                            st.caption("No Image")
+                            
+                    with c_text:
+                        st.subheader(item['disease'])
+                        st.caption(f"📅 {item['timestamp']} | Crop: {item['crop']}")
+                        st.write(f"**Cure:** {item['treatment']}")
 
 # --- 9. MASTER CONTROL ---
 if st.session_state.logged_in:
