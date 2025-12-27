@@ -297,7 +297,6 @@ def main_app():
             
             current_crop = st.session_state.selected_crop
             
-            # TABS: CAMERA vs UPLOAD
             tab_cam, tab_upload = st.tabs(["📸 Take Photo", "📂 Upload from Gallery"])
             final_image = None
 
@@ -336,21 +335,8 @@ def main_app():
                         clean_name = pred_class.replace("_", " ").lower()
                         info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
                         
-                        # --- SAFE LOGIC (NO BLOCKING) ---
-                        # We try to check confidence just to show a warning, but we do NOT stop the process.
-                        try:
-                            val_str = str(result['confidence']).replace('%','').strip()
-                            conf_score = float(val_str)
-                            # If it looks like decimal 0.98, convert to 98
-                            if conf_score <= 1.0: conf_score *= 100
-                        except:
-                            conf_score = 100.0 # Assume high if parsing fails
-
+                        # --- UNRESTRICTED DISPLAY (No blocking) ---
                         with results_placeholder.container():
-                            # Soft Warning for wrong crops (Does not block)
-                            if conf_score < 40.0:
-                                st.warning(f"⚠️ Low Confidence ({int(conf_score)}%). This might not be a {current_crop} leaf.")
-
                             if info:
                                 st.success(f"Result: {info['disease_name']}")
                                 st.info(f"Confidence: {result['confidence']}")
