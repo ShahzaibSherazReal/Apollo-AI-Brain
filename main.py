@@ -11,7 +11,8 @@ import json
 import hashlib
 import base64
 import requests
-import pandas as pd  # <--- NEW: For Tables & Filtering
+import pandas as pd
+import uuid
 from utils.ai_brain import predict_disease
 
 # --- 1. CONFIGURATION ---
@@ -20,6 +21,8 @@ st.set_page_config(page_title="Leaf Doctor", page_icon="🌿", layout="wide")
 # --- 2. DATABASE & AUTH SYSTEM ---
 USERS_FILE = "users.json"
 HISTORY_FILE = "history.json"
+POSTS_FILE = "posts.json"
+CHAT_FILE = "chat.json"  # <--- NEW: Database for Chat Messages
 
 def load_data(file, default_data):
     if os.path.exists(file):
@@ -48,6 +51,8 @@ def base64_to_img(base64_str):
 
 users_db = load_data(USERS_FILE, {})
 history_db = load_data(HISTORY_FILE, {})
+posts_db = load_data(POSTS_FILE, [])
+chat_db = load_data(CHAT_FILE, [])
 
 # --- 3. SESSION STATE ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
@@ -56,7 +61,6 @@ if 'internal_page' not in st.session_state: st.session_state.internal_page = 'ho
 if 'selected_crop' not in st.session_state: st.session_state.selected_crop = None
 if 'dark_mode' not in st.session_state: st.session_state.dark_mode = True
 if 'voice_lang' not in st.session_state: st.session_state.voice_lang = 'English'
-# NEW: Admin View Toggle
 if 'admin_mode' not in st.session_state: st.session_state.admin_mode = 'dashboard' 
 
 # --- 4. THEME ---
@@ -72,6 +76,8 @@ st.markdown(f"""
     .stButton>button {{ width: 100%; border-radius: 8px; height: 3em; background-color: {btn_bg}; color: {text_col}; border: 1px solid #4CAF50; }}
     div[data-testid="stVerticalBlockBorderWrapper"] {{ background-color: {card_bg}; border-radius: 10px; padding: 15px; border: 1px solid #333; }}
     h1, h2, h3, h4, h5, h6, p, label {{ color: {text_col} !important; }}
+    /* Chat Bubble Style */
+    .chat-bubble {{ padding: 10px; border-radius: 10px; margin-bottom: 10px; background-color: #333; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -211,8 +217,8 @@ def main_app():
             st.rerun()
         st.divider()
         
-        # --- DYNAMIC MENU ---
-        options = ["🏠 Home", "📜 My History"]
+        # --- MENU ---
+        options = ["🏠 Home", "🌐 Community Feed", "💬 Global Chat", "📜 My History"]
         if st.session_state.user == "admin":
             options.append("📊 Admin Dashboard")
             
@@ -273,28 +279,9 @@ def main_app():
                             st.rerun()
 
             st.markdown("---")
-            
-            # MAPS
-            st.subheader("📍 Find Agricultural Stores Nearby")
-            st.caption("Showing nearest Fertilizer & Pesticide shops")
-            map_html = """
-            <iframe 
-                width="100%" 
-                height="400" 
-                frameborder="0" 
-                scrolling="no" 
-                marginheight="0" 
-                marginwidth="0" 
-                src="https://maps.google.com/maps?q=agriculture+store+near+me&output=embed">
-            </iframe>
-            """
-            st.components.v1.html(map_html, height=400)
-            
-            st.markdown("---")
             st.markdown("""
                 <div style='text-align: center; color: gray; padding: 20px;'>
                     <h3>🚀 More crops coming soon...</h3>
-                    <p>We are currently training models for Tomato, Grape, and Wheat.</p>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -386,8 +373,165 @@ def main_app():
                                         "image": img_str
                                     })
                                     save_data(HISTORY_FILE, history_db)
+                                    
+                                    st.divider()
+                                    
+                                    # --- POST THIS SCAN TO COMMUNITY ---
+                                    st.subheader("🌐 Community Help")
+                                    with st.expander(f"🚀 Post result to Community Feed"):
+                                        with st.form("community_post_form"):
+                                            st.write("Ask for help regarding this specific scan.")
+                                            user_caption = st.text_area("Your Question/Caption", placeholder="Example: I used copper fungicide but it's not working. What should I do?")
+                                            submitted = st.form_submit_button("🚀 Post Now")
+                                            if submitted:
+                                                if len(user_caption) > 5:
+                                                    new_post = {
+                                                        "id": str(uuid.uuid4()),
+                                                        "user": st.session_state.user,
+                                                        "crop": current_crop,
+                                                        "disease": info['disease_name'],
+                                                        "timestamp": str(datetime.date.today()),
+                                                        "caption": user_caption,
+                                                        "image": img_str,
+                                                        "comments": []
+                                                    }
+                                                    posts_db.append(new_post)
+                                                    save_data(POSTS_FILE, posts_db)
+                                                    st.success("Posted to Community Feed!")
+                                                else:
+                                                    st.error("Please write a longer caption.")
+
                                 else:
                                     st.warning(f"Detected {pred_class}, but no medical info found.")
+
+    # --- COMMUNITY FEED TAB ---
+    elif menu == "🌐 Community Feed":
+        st.title("🌐 Farmer's Community")
+        st.write("Browse recent issues from other farmers and offer your help.")
+        
+        # --- NEW: INDEPENDENT POST BUTTON (POST ANYTHING) ---
+        with st.expander("📸 Create a New Post (Share anything!)"):
+            with st.form("new_generic_post"):
+                st.write("Share a photo from your gallery (Farm, Tools, Harvest, etc.)")
+                uploaded_feed_img = st.file_uploader("Choose Image", type=['jpg','png','jpeg'])
+                feed_caption = st.text_area("Caption", placeholder="Look at my harvest today!")
+                
+                if st.form_submit_button("Publish Post"):
+                    if feed_caption and uploaded_feed_img:
+                        # Convert uploaded file to base64
+                        img_pil = Image.open(uploaded_feed_img)
+                        b64_str = img_to_base64(img_pil)
+                        
+                        new_post = {
+                            "id": str(uuid.uuid4()),
+                            "user": st.session_state.user,
+                            "crop": "General",
+                            "disease": "Update",
+                            "timestamp": str(datetime.date.today()),
+                            "caption": feed_caption,
+                            "image": b64_str,
+                            "comments": []
+                        }
+                        posts_db.append(new_post)
+                        save_data(POSTS_FILE, posts_db)
+                        st.success("Published!")
+                        st.rerun()
+                    else:
+                        st.error("Please add both an image and a caption.")
+
+        st.divider()
+        
+        if not posts_db:
+            st.info("No posts yet. Be the first to share a scan!")
+        
+        # Show newest posts first
+        for i, post in enumerate(reversed(posts_db)):
+            with st.container(border=True):
+                c_img, c_details = st.columns([1, 2])
+                
+                with c_img:
+                    # Show Post Image
+                    try:
+                        p_img = base64_to_img(post['image'])
+                        st.image(p_img, use_container_width=True)
+                    except: st.error("Image Error")
+                
+                with c_details:
+                    # Header
+                    st.markdown(f"**@{post['user']}** • *{post['timestamp']}*")
+                    if post['crop'] == "General":
+                        st.caption("📢 General Update")
+                    else:
+                        st.caption(f"Found: {post['disease']} ({post['crop']})")
+                    
+                    # Caption
+                    st.markdown(f"#### \"{post['caption']}\"")
+                    
+                    st.divider()
+                    
+                    # Comments Section
+                    comments = post.get('comments', [])
+                    if comments:
+                        st.write("💬 **Comments:**")
+                        for c in comments:
+                            st.markdown(f"> **{c['user']}:** {c['text']}")
+                    else:
+                        st.caption("No comments yet. Be the first to help!")
+                    
+                    # Add Comment Form (Unique key per post)
+                    with st.form(f"comment_form_{post['id']}"):
+                        new_comment_text = st.text_input("Write a reply...", placeholder="Suggest a cure...")
+                        if st.form_submit_button("Reply"):
+                            if new_comment_text:
+                                # Update Database
+                                # Need to find the original post in the NON-reversed list to update
+                                for db_post in posts_db:
+                                    if db_post['id'] == post['id']:
+                                        db_post['comments'].append({
+                                            "user": st.session_state.user,
+                                            "text": new_comment_text,
+                                            "time": str(datetime.datetime.now())
+                                        })
+                                        break
+                                save_data(POSTS_FILE, posts_db)
+                                st.rerun()
+    
+    # --- NEW: GLOBAL CHAT TAB ---
+    elif menu == "💬 Global Chat":
+        st.title("💬 Farmers' Global Chat")
+        st.caption("Real-time discussion with all users of Leaf Doctor.")
+        
+        # Display Chat History
+        chat_container = st.container(height=400, border=True)
+        with chat_container:
+            if not chat_db:
+                st.info("Welcome to the chat room! Say hello.")
+            for msg in chat_db:
+                # Align my messages right, others left
+                if msg['user'] == st.session_state.user:
+                    st.markdown(f"<div style='text-align: right; color: #4CAF50;'><b>You</b>: {msg['text']}</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<div style='text-align: left; color: #aaa;'><b>{msg['user']}</b>: {msg['text']}</div>", unsafe_allow_html=True)
+        
+        # Chat Input
+        with st.form("chat_input_form", clear_on_submit=True):
+            c_input = st.columns([8, 1])
+            with c_input[0]:
+                user_msg = st.text_input("Type a message...", label_visibility="collapsed")
+            with c_input[1]:
+                sent = st.form_submit_button("Send")
+            
+            if sent and user_msg:
+                new_msg = {
+                    "user": st.session_state.user,
+                    "text": user_msg,
+                    "time": str(datetime.datetime.now())
+                }
+                chat_db.append(new_msg)
+                # Keep only last 50 messages to save space
+                if len(chat_db) > 50: chat_db = chat_db[-50:]
+                save_data(CHAT_FILE, chat_db)
+                st.rerun()
 
     # --- HISTORY TAB ---
     elif menu == "📜 My History":
@@ -430,21 +574,13 @@ def main_app():
                         st.caption(f"📅 {item['timestamp']} | Crop: {item['crop']}")
                         st.write(f"**Cure:** {item['treatment']}")
 
-    # --- NEW: ADVANCED ADMIN DASHBOARD ---
+    # --- ADVANCED ADMIN DASHBOARD ---
     elif menu == "📊 Admin Dashboard":
         st.title("📊 Disease Surveillance Center")
-        
-        # 1. MODE SELECTION (DASHBOARD vs TABLE)
         if st.session_state.admin_mode == 'dashboard':
-            
-            # --- DASHBOARD VIEW ---
             st.caption("Restricted Access: Administrator Only")
-            
-            # Prepare Metrics
             all_history = []
-            for u in history_db:
-                all_history.extend(history_db[u])
-            
+            for u in history_db: all_history.extend(history_db[u])
             if not all_history:
                 st.warning("No data collected yet.")
             else:
@@ -452,10 +588,7 @@ def main_app():
                 c1.metric("Total Scans", len(all_history))
                 c2.metric("Active Users", len(history_db.keys()))
                 c3.metric("Last Scan", all_history[-1]['timestamp'])
-                
                 st.divider()
-                
-                # Charts
                 crop_counts = {}
                 disease_counts = {}
                 for h in all_history:
@@ -463,7 +596,6 @@ def main_app():
                     crop_counts[c] = crop_counts.get(c, 0) + 1
                     d = h.get('disease', 'Unknown')
                     disease_counts[d] = disease_counts.get(d, 0) + 1
-                
                 chart1, chart2 = st.columns(2)
                 with chart1:
                     st.subheader("Crop Distribution")
@@ -471,98 +603,50 @@ def main_app():
                 with chart2:
                     st.subheader("Disease Analysis")
                     st.bar_chart(disease_counts)
-
             st.write("")
             st.divider()
-            # THE "REDIRECT" BUTTON
             if st.button("📂 View Raw Database Records (Table View)", type="primary"):
                 st.session_state.admin_mode = 'table'
                 st.rerun()
 
         elif st.session_state.admin_mode == 'table':
-            
-            # --- TABLE VIEW (THE "PAGE") ---
             col_head, col_btn = st.columns([4, 1])
             with col_head: st.subheader("🗄️ Master Database Records")
             with col_btn:
                 if st.button("← Back to Charts"):
                     st.session_state.admin_mode = 'dashboard'
                     st.rerun()
-            
-            # 1. Flatten Data for DataFrame
             all_records = []
             for user, history in history_db.items():
                 for record in history:
                     rec = record.copy()
                     rec['user'] = user
-                    # Convert Base64 to Data URI for ImageColumn
-                    if 'image' in rec:
-                        rec['image_display'] = f"data:image/jpeg;base64,{rec['image']}"
-                    else:
-                        rec['image_display'] = None
+                    if 'image' in rec: rec['image_display'] = f"data:image/jpeg;base64,{rec['image']}"
+                    else: rec['image_display'] = None
                     all_records.append(rec)
-            
             if not all_records:
                 st.info("No records found.")
             else:
                 df = pd.DataFrame(all_records)
-                
-                # 2. Sidebar Filters (Inside Admin View)
                 with st.sidebar:
                     st.divider()
                     st.subheader("🌪️ Table Filters")
-                    
-                    # Filter: Crops
                     available_crops = list(df['crop'].unique()) if 'crop' in df.columns else []
                     selected_crops = st.multiselect("Filter by Crop", available_crops, default=available_crops)
-                    
-                    # Filter: Date
-                    # Convert timestamp column to datetime objects for filtering
                     df['dt_obj'] = pd.to_datetime(df['timestamp'])
                     min_date = df['dt_obj'].min().date()
                     max_date = df['dt_obj'].max().date()
-                    
                     date_range = st.date_input("Filter by Date Range", [min_date, max_date])
-
-                # 3. Apply Filters
-                if 'crop' in df.columns:
-                    df = df[df['crop'].isin(selected_crops)]
-                
+                if 'crop' in df.columns: df = df[df['crop'].isin(selected_crops)]
                 if len(date_range) == 2:
                     start_d, end_d = date_range
                     df = df[(df['dt_obj'].dt.date >= start_d) & (df['dt_obj'].dt.date <= end_d)]
-                
-                # 4. Display Table
                 st.write(f"Showing {len(df)} records.")
-                
-                # Define columns to show
                 cols_to_show = ['timestamp', 'user', 'crop', 'disease', 'image_display']
-                
-                st.dataframe(
-                    df[cols_to_show],
-                    column_config={
-                        "image_display": st.column_config.ImageColumn("Leaf Image", help="Scan Thumbnail"),
-                        "timestamp": "Time",
-                        "user": "Farmer Name",
-                        "crop": "Crop Type",
-                        "disease": "Diagnosis"
-                    },
-                    use_container_width=True,
-                    height=500
-                )
-                
-                # 5. Download Button
-                # Create a clean CSV without the massive image strings
+                st.dataframe(df[cols_to_show], column_config={"image_display": st.column_config.ImageColumn("Leaf Image"), "timestamp": "Time", "user": "Farmer Name", "crop": "Crop Type", "disease": "Diagnosis"}, use_container_width=True, height=500)
                 clean_df = df.drop(columns=['image', 'image_display', 'dt_obj'], errors='ignore')
                 csv = clean_df.to_csv(index=False).encode('utf-8')
-                
-                st.download_button(
-                    label="📥 Download Filtered Report (CSV)",
-                    data=csv,
-                    file_name="leaf_doctor_report.csv",
-                    mime="text/csv",
-                    type="primary"
-                )
+                st.download_button(label="📥 Download Filtered Report (CSV)", data=csv, file_name="leaf_doctor_report.csv", mime="text/csv", type="primary")
 
 # --- 9. MASTER CONTROL ---
 if st.session_state.logged_in:
