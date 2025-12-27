@@ -11,6 +11,7 @@ import json
 import hashlib
 import base64
 import requests
+from fpdf import FPDF
 from utils.ai_brain import predict_disease
 
 # --- 1. CONFIGURATION ---
@@ -45,6 +46,34 @@ def img_to_base64(image):
 def base64_to_img(base64_str):
     return Image.open(io.BytesIO(base64.b64decode(base64_str)))
 
+# --- PDF GENERATOR ---
+def create_pdf(user_name, crop, disease, confidence, treatment):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, txt="LEAF DOCTOR - DIAGNOSTIC REPORT", ln=1, align='C')
+    pdf.line(10, 30, 200, 30)
+    pdf.ln(20)
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"Date: {datetime.date.today()}", ln=1)
+    pdf.cell(200, 10, txt=f"Farmer Name: {user_name}", ln=1)
+    pdf.cell(200, 10, txt=f"Crop: {crop}", ln=1)
+    pdf.ln(10)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt=f"Diagnosis: {disease}", ln=1)
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"Confidence Score: {confidence}", ln=1)
+    pdf.ln(10)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(200, 10, txt="Recommended Treatment:", ln=1)
+    pdf.set_font("Arial", size=12)
+    pdf.multi_cell(0, 10, txt=treatment)
+    pdf.ln(20)
+    pdf.set_font("Arial", 'I', 10)
+    pdf.cell(200, 10, txt="Generated automatically by Leaf Doctor AI.", ln=1, align='C')
+    return pdf.output(dest='S').encode('latin-1')
+
 users_db = load_data(USERS_FILE, {})
 history_db = load_data(HISTORY_FILE, {})
 
@@ -72,7 +101,8 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 5. KNOWLEDGE BASE ---
+# --- 5. KNOWLEDGE BASE & STRICT RULES ---
+# This is the "White List". Apple can ONLY have Apple diseases.
 ALLOWED_CLASSES = {
     "Apple": ["apple_black_rot", "apple_healthy", "apple_scab"],
     "Corn": ["corn_common_rust", "corn_healthy", "corn_leaf_blight"],
@@ -331,41 +361,71 @@ def main_app():
                     if "error" in result:
                         results_placeholder.error(result['error'])
                     else:
-                        pred_class = result['class']
-                        clean_name = pred_class.replace("_", " ").lower()
-                        info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
+                        pred_class = result['class'] # e.g. "potato_early_blight"
                         
-                        # --- UNRESTRICTED DISPLAY (No blocking) ---
-                        with results_placeholder.container():
-                            if info:
-                                st.success(f"Result: {info['disease_name']}")
-                                st.info(f"Confidence: {result['confidence']}")
-                                st.markdown(f"""
-                                <div style="background-color: {card_bg}; padding: 15px; border-radius: 10px; border-left: 5px solid #4CAF50;">
-                                    <h4>Diagnosis</h4>
-                                    <p>{info['description']}</p>
-                                    <h4>Treatment</h4>
-                                    <p>{info['treatment']}</p>
-                                </div>
-                                """, unsafe_allow_html=True)
-                                st.link_button("🛒 Buy Medicine (Daraz.pk)", DARAZ_LINK)
-                                st.write("---")
-                                play_audio(info['disease_name'])
+                        # --- 🛡️ THE BOUNCER LOGIC ---
+                        # We check if the predicted disease is allowed for the Current Crop.
+                        # If I am in "Apple", I should ONLY see "apple_black_rot", "apple_scab", etc.
+                        
+                        allowed_for_this_crop = ALLOWED_CLASSES.get(current_crop, [])
+                        
+                        if pred_class not in allowed_for_this_crop:
+                            # 🚨 WRONG CROP DETECTED
+                            st.error(f"⚠️ ERROR: Mismatch Detected!")
+                            st.markdown(f"""
+                                The AI thinks this is **{pred_class.replace('_', ' ').title()}**, but you are currently in the **{current_crop}** section.
                                 
-                                # SAVE HISTORY
-                                user = st.session_state.user
-                                if user not in history_db: history_db[user] = []
-                                img_str = img_to_base64(final_image)
-                                history_db[user].append({
-                                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                    "crop": current_crop,
-                                    "disease": info['disease_name'],
-                                    "treatment": info['treatment'],
-                                    "image": img_str
-                                })
-                                save_data(HISTORY_FILE, history_db)
-                            else:
-                                st.warning(f"Detected {pred_class}, but no medical info found.")
+                                Please ensure:
+                                1. You uploaded a valid **{current_crop}** leaf.
+                                2. The image is clear and focused.
+                            """)
+                            # We STOP here. We do not save to history.
+                        
+                        else:
+                            # ✅ CORRECT CROP - Show Results
+                            clean_name = pred_class.replace("_", " ").lower()
+                            info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
+                            
+                            with results_placeholder.container():
+                                if info:
+                                    st.success(f"Result: {info['disease_name']}")
+                                    
+                                    st.markdown(f"""
+                                    <div style="background-color: {card_bg}; padding: 15px; border-radius: 10px; border-left: 5px solid #4CAF50;">
+                                        <h4>Diagnosis</h4>
+                                        <p>{info['description']}</p>
+                                        <h4>Treatment</h4>
+                                        <p>{info['treatment']}</p>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    
+                                    # Confidence at bottom
+                                    st.caption(f"AI Confidence Score: {result['confidence']}")
+
+                                    c1, c2, c3 = st.columns(3)
+                                    c1.link_button("🛒 Buy Medicine", DARAZ_LINK)
+                                    whatsapp_msg = f"Hello Leaf Doctor, my {current_crop} has {info['disease_name']}. Please help!"
+                                    c2.link_button("💬 Ask Expert", f"https://wa.me/?text={whatsapp_msg}")
+                                    pdf_bytes = create_pdf(st.session_state.user, current_crop, info['disease_name'], result['confidence'], info['treatment'])
+                                    c3.download_button("📄 Download Report", pdf_bytes, "medical_report.pdf", "application/pdf")
+                                    
+                                    st.write("---")
+                                    play_audio(info['disease_name'])
+                                    
+                                    # SAVE HISTORY
+                                    user = st.session_state.user
+                                    if user not in history_db: history_db[user] = []
+                                    img_str = img_to_base64(final_image)
+                                    history_db[user].append({
+                                        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                        "crop": current_crop,
+                                        "disease": info['disease_name'],
+                                        "treatment": info['treatment'],
+                                        "image": img_str
+                                    })
+                                    save_data(HISTORY_FILE, history_db)
+                                else:
+                                    st.warning(f"Detected {pred_class}, but no medical info found.")
 
     # --- HISTORY TAB ---
     elif menu == "📜 My History":
