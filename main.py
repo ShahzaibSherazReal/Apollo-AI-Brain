@@ -22,7 +22,7 @@ st.set_page_config(page_title="Leaf Doctor", page_icon="🌿", layout="wide")
 USERS_FILE = "users.json"
 HISTORY_FILE = "history.json"
 POSTS_FILE = "posts.json"
-CHAT_FILE = "chat.json"  # <--- NEW: Database for Chat Messages
+CHAT_FILE = "chat.json"
 
 def load_data(file, default_data):
     if os.path.exists(file):
@@ -76,8 +76,6 @@ st.markdown(f"""
     .stButton>button {{ width: 100%; border-radius: 8px; height: 3em; background-color: {btn_bg}; color: {text_col}; border: 1px solid #4CAF50; }}
     div[data-testid="stVerticalBlockBorderWrapper"] {{ background-color: {card_bg}; border-radius: 10px; padding: 15px; border: 1px solid #333; }}
     h1, h2, h3, h4, h5, h6, p, label {{ color: {text_col} !important; }}
-    /* Chat Bubble Style */
-    .chat-bubble {{ padding: 10px; border-radius: 10px; margin-bottom: 10px; background-color: #333; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -209,6 +207,9 @@ def login_screen():
 
 # --- 8. MAIN APPLICATION ---
 def main_app():
+    # --- FIX CRASH: Tell Python to use the GLOBAL chat_db, not a local one ---
+    global chat_db 
+    
     with st.sidebar:
         st.write(f"👤 **{st.session_state.user}**")
         if st.button("🚪 Logout"):
@@ -496,7 +497,7 @@ def main_app():
                                 save_data(POSTS_FILE, posts_db)
                                 st.rerun()
     
-    # --- NEW: GLOBAL CHAT TAB ---
+    # --- GLOBAL CHAT TAB ---
     elif menu == "💬 Global Chat":
         st.title("💬 Farmers' Global Chat")
         st.caption("Real-time discussion with all users of Leaf Doctor.")
@@ -528,8 +529,11 @@ def main_app():
                     "time": str(datetime.datetime.now())
                 }
                 chat_db.append(new_msg)
-                # Keep only last 50 messages to save space
-                if len(chat_db) > 50: chat_db = chat_db[-50:]
+                
+                # --- SAFE MODIFY: Use Global Variable ---
+                if len(chat_db) > 50: 
+                    chat_db = chat_db[-50:]  # This is now safe because of 'global chat_db'
+                
                 save_data(CHAT_FILE, chat_db)
                 st.rerun()
 
