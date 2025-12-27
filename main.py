@@ -102,7 +102,7 @@ KNOWLEDGE_BASE = {
     "Potato Healthy": { "disease_name": "Healthy Potato Plant", "description": "Dark green, firm leaves.", "treatment": "Keep soil moist but drained." },
     "Potato Late Blight": { "disease_name": "Potato Late Blight", "description": "Water-soaked spots turning black.", "treatment": "Remove infected plants immediately." }
 }
-DARAZ_LINK = "https://www.kissanghar.pk/"
+DARAZ_LINK = "https://www.daraz.pk/products/80-250-i161020707-s1327886846.html"
 
 # --- 6. FUNCTIONS ---
 def get_weather():
@@ -175,7 +175,7 @@ def login_screen():
                 if username in users_db and users_db[username]['password'] == enc_pass:
                     st.session_state.logged_in = True
                     st.session_state.user = username
-                    st.toast("Welcome!", icon="✅")
+                    st.toast("Welcome back!", icon="✅")
                     time.sleep(0.5)
                     st.rerun()
                 else:
@@ -205,7 +205,14 @@ def main_app():
             st.session_state.internal_page = 'home'
             st.rerun()
         st.divider()
-        menu = st.radio("Navigation", ["🏠 Home", "📜 My History"])
+        
+        # --- NEW: DYNAMIC MENU (Only shows Admin if user is 'admin') ---
+        options = ["🏠 Home", "📜 My History"]
+        if st.session_state.user == "admin":
+            options.append("📊 Admin Dashboard")
+            
+        menu = st.radio("Navigation", options)
+        
         st.divider()
         with st.expander("🌱 Tips for Gardening"):
             st.markdown("""
@@ -331,30 +338,24 @@ def main_app():
                     if "error" in result:
                         results_placeholder.error(result['error'])
                     else:
-                        pred_class = result['class'] # e.g. "potato_early_blight"
+                        pred_class = result['class'] 
                         
-                        # --- STRICT CROP CHECK (The Bouncer) ---
+                        # --- STRICT CROP CHECK ---
                         allowed_for_this_crop = ALLOWED_CLASSES.get(current_crop, [])
                         
                         if pred_class not in allowed_for_this_crop:
-                            # 🚨 WRONG CROP DETECTED
                             st.error(f"⚠️ ERROR: Mismatch Detected!")
                             st.markdown(f"""
                                 The AI thinks this is **{pred_class.replace('_', ' ').title()}**, but you are currently in the **{current_crop}** section.
-                                
-                                Please ensure:
-                                1. You uploaded a valid **{current_crop}** leaf.
-                                2. The image is clear and focused.
+                                Please ensure you uploaded a valid **{current_crop}** leaf.
                             """)
                         else:
-                            # ✅ CORRECT CROP
                             clean_name = pred_class.replace("_", " ").lower()
                             info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
                             
                             with results_placeholder.container():
                                 if info:
                                     st.success(f"Result: {info['disease_name']}")
-                                    
                                     st.markdown(f"""
                                     <div style="background-color: {card_bg}; padding: 15px; border-radius: 10px; border-left: 5px solid #4CAF50;">
                                         <h4>Diagnosis</h4>
@@ -364,9 +365,7 @@ def main_app():
                                     </div>
                                     """, unsafe_allow_html=True)
                                     
-                                    # REMOVED CONFIDENCE DISPLAY & EXTRA BUTTONS
-                                    st.link_button("🛒 Buy Medicine", DARAZ_LINK)
-                                    
+                                    st.link_button("🛒 Buy Medicine (Daraz.pk)", DARAZ_LINK)
                                     st.write("---")
                                     play_audio(info['disease_name'])
                                     
@@ -425,6 +424,43 @@ def main_app():
                         st.subheader(item['disease'])
                         st.caption(f"📅 {item['timestamp']} | Crop: {item['crop']}")
                         st.write(f"**Cure:** {item['treatment']}")
+
+    # --- NEW: ADMIN DASHBOARD TAB ---
+    elif menu == "📊 Admin Dashboard":
+        st.title("📊 Disease Surveillance Center")
+        st.caption("Restricted Access: Administrator Only")
+        
+        all_history = []
+        for u in history_db:
+            all_history.extend(history_db[u])
+            
+        if not all_history:
+            st.warning("No data collected yet.")
+        else:
+            total_scans = len(all_history)
+            unique_users = len(history_db.keys())
+            st.metric("Total Scans Performed", total_scans)
+            st.metric("Active Farmers", unique_users)
+            st.divider()
+            
+            crop_counts = {}
+            disease_counts = {}
+            for h in all_history:
+                c = h.get('crop', 'Unknown')
+                crop_counts[c] = crop_counts.get(c, 0) + 1
+                d = h.get('disease', 'Unknown')
+                disease_counts[d] = disease_counts.get(d, 0) + 1
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("🔥 Most Scanned Crops")
+                st.bar_chart(crop_counts)
+            with col2:
+                st.subheader("🦠 Disease Outbreaks")
+                st.bar_chart(disease_counts)
+            
+            with st.expander("🔍 View Raw Database Records"):
+                st.write(history_db)
 
 # --- 9. MASTER CONTROL ---
 if st.session_state.logged_in:
