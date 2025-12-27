@@ -107,7 +107,9 @@ def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
         draw = ImageDraw.Draw(frame)
         scan_y = i if i < height else height - 1
         draw.line([(0, scan_y), (width, scan_y)], fill=(0, 255, 0, 200), width=5)
+        # Update the LEFT image in place
         image_placeholder.image(frame, caption="🔍 ANALYZING...", use_container_width=True)
+        # Show graph on RIGHT side
         with graph_placeholder.container():
             g1, g2 = st.columns(2)
             g1.line_chart([random.randint(10, 100) for _ in range(20)], height=100)
@@ -181,10 +183,7 @@ def main_app():
             st.session_state.internal_page = 'home'
             st.rerun()
         st.divider()
-        
-        # Navigation (Removed "Settings" from here)
         menu = st.radio("Navigation", ["🏠 Home", "📜 My History"])
-        
         st.divider()
         with st.expander("🌱 Tips for Gardening"):
             st.markdown("""
@@ -203,17 +202,12 @@ def main_app():
             with open("app-release.apk", "rb") as f:
                 st.download_button("📥 Download APK", f, "LeafDoctor.apk", "application/vnd.android.package-archive")
 
-        # --- SETTINGS MOVED TO BOTTOM ---
         st.divider()
         st.subheader("⚙️ Settings")
-        
-        # FIXED THEME SWITCH
-        # We use a callback or direct check to ensure state updates immediately
         is_dark = st.toggle("🌙 Dark Mode", value=st.session_state.dark_mode)
         if is_dark != st.session_state.dark_mode:
             st.session_state.dark_mode = is_dark
             st.rerun()
-
         st.session_state.voice_lang = st.radio("Voice Language:", ["English", "Urdu"], horizontal=True)
 
     # --- HOME TAB LOGIC ---
@@ -255,51 +249,74 @@ def main_app():
             uploaded_file = st.file_uploader(f"Upload {current_crop} Leaf", type=['jpg','png','jpeg'])
             
             if uploaded_file:
-                c1, c2 = st.columns([1,1])
-                img = Image.open(uploaded_file)
-                c1.image(img, caption="Specimen", use_container_width=True)
+                # --- NEW LAYOUT: LEFT = IMG+BTN, RIGHT = RESULTS ---
+                col_left, col_right = st.columns([1, 1])
                 
-                if c2.button("INITIATE DEEP SCAN", type="primary"):
-                    ph1 = c2.empty()
-                    ph2 = c2.empty()
-                    heavy_duty_scan(ph1, ph2, img)
-                    ph2.empty()
+                image = Image.open(uploaded_file)
+                
+                with col_left:
+                    # 1. Image Placeholder (We will animate THIS one)
+                    scan_img_placeholder = st.empty()
+                    scan_img_placeholder.image(image, caption="Specimen", use_container_width=True)
                     
-                    result = predict_disease(img)
+                    st.write("") # Spacer
+                    # 2. Button strictly UNDER the image
+                    scan_btn = st.button("INITIATE DEEP SCAN", type="primary", use_container_width=True)
+
+                with col_right:
+                    # 3. Right side placeholders for Graphs & Results
+                    graph_placeholder = st.empty()
+                    results_placeholder = st.empty()
+
+                if scan_btn:
+                    # ANIMATION: Update the LEFT placeholder, show graph on RIGHT
+                    heavy_duty_scan(scan_img_placeholder, graph_placeholder, image)
+                    
+                    # RESET: Put the original clear image back on LEFT
+                    scan_img_placeholder.image(image, caption="Specimen", use_container_width=True)
+                    graph_placeholder.empty() # Clear the graphs to make room for results
+                    
+                    # PREDICTION
+                    result = predict_disease(image)
                     
                     if "error" in result:
-                        c2.error(result['error'])
+                        results_placeholder.error(result['error'])
                     else:
                         pred_class = result['class']
                         conf = result['confidence']
                         clean_name = pred_class.replace("_", " ").lower()
                         info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
                         
-                        if info:
-                            c2.success(f"Result: {info['disease_name']}")
-                            c2.info(f"Confidence: {conf}")
-                            st.markdown(f"""
-                            <div style="background-color: {card_bg}; padding: 15px; border-radius: 10px; border-left: 5px solid #4CAF50;">
-                                <h4>Diagnosis</h4>
-                                <p>{info['description']}</p>
-                                <h4>Treatment</h4>
-                                <p>{info['treatment']}</p>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            st.link_button("🛒 Buy Medicine (Daraz.pk)", DARAZ_LINK)
-                            play_audio(info['disease_name'])
-                            
-                            user = st.session_state.user
-                            if user not in history_db: history_db[user] = []
-                            history_db[user].append({
-                                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                "crop": current_crop,
-                                "disease": info['disease_name'],
-                                "treatment": info['treatment']
-                            })
-                            save_data(HISTORY_FILE, history_db)
-                        else:
-                            c2.warning(f"Detected {pred_class}, but no medical info found.")
+                        # DISPLAY RESULTS ON RIGHT SIDE
+                        with results_placeholder.container():
+                            if info:
+                                st.success(f"Result: {info['disease_name']}")
+                                st.info(f"Confidence: {conf}")
+                                st.markdown(f"""
+                                <div style="background-color: {card_bg}; padding: 15px; border-radius: 10px; border-left: 5px solid #4CAF50;">
+                                    <h4>Diagnosis</h4>
+                                    <p>{info['description']}</p>
+                                    <h4>Treatment</h4>
+                                    <p>{info['treatment']}</p>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                st.link_button("🛒 Buy Medicine (Daraz.pk)", DARAZ_LINK)
+                                st.write("---")
+                                # AUDIO AT THE BOTTOM
+                                play_audio(info['disease_name'])
+                                
+                                # Save History
+                                user = st.session_state.user
+                                if user not in history_db: history_db[user] = []
+                                history_db[user].append({
+                                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                    "crop": current_crop,
+                                    "disease": info['disease_name'],
+                                    "treatment": info['treatment']
+                                })
+                                save_data(HISTORY_FILE, history_db)
+                            else:
+                                st.warning(f"Detected {pred_class}, but no medical info found.")
 
     # --- HISTORY TAB ---
     elif menu == "📜 My History":
