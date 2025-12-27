@@ -10,6 +10,7 @@ import os
 import json
 import hashlib
 import base64
+import requests  # <--- NEW: For Weather API
 from utils.ai_brain import predict_disease
 
 # --- 1. CONFIGURATION ---
@@ -37,13 +38,11 @@ def hash_password(password):
 
 # --- IMAGE CONVERSION HELPERS ---
 def img_to_base64(image):
-    """Converts PIL Image to Base64 string for JSON storage"""
     buffered = io.BytesIO()
     image.save(buffered, format="JPEG")
     return base64.b64encode(buffered.getvalue()).decode()
 
 def base64_to_img(base64_str):
-    """Converts Base64 string back to PIL Image"""
     return Image.open(io.BytesIO(base64.b64decode(base64_str)))
 
 users_db = load_data(USERS_FILE, {})
@@ -106,6 +105,25 @@ KNOWLEDGE_BASE = {
 DARAZ_LINK = "https://www.daraz.pk/products/80-250-i161020707-s1327886846.html"
 
 # --- 6. FUNCTIONS ---
+def get_weather():
+    """Fetches real-time weather for Karachi (default) using Open-Meteo API"""
+    try:
+        # Coordinates for Karachi (You can change these to any city)
+        lat, lon = 24.8607, 67.0011 
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+        response = requests.get(url).json()
+        temp = response['current_weather']['temperature']
+        wcode = response['current_weather']['weathercode']
+        
+        # Simple Weather Code Interpretation
+        if wcode <= 3: condition = "Sunny/Clear ☀️"
+        elif wcode <= 49: condition = "Cloudy/Foggy ☁️"
+        else: condition = "Rainy/Stormy 🌧️"
+        
+        return temp, condition
+    except:
+        return None, None
+
 def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
     img = original_img.copy().convert("RGBA")
     width, height = img.size
@@ -119,9 +137,7 @@ def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
         draw = ImageDraw.Draw(frame)
         scan_y = i if i < height else height - 1
         draw.line([(0, scan_y), (width, scan_y)], fill=(0, 255, 0, 200), width=5)
-        # Animate the LEFT placeholder
         image_placeholder.image(frame, caption="🔍 ANALYZING...", use_container_width=True)
-        # Graph on RIGHT
         with graph_placeholder.container():
             g1, g2 = st.columns(2)
             g1.line_chart([random.randint(10, 100) for _ in range(20)], height=100)
@@ -226,6 +242,16 @@ def main_app():
     if menu == "🏠 Home":
         
         if st.session_state.internal_page == 'home':
+            
+            # --- FEATURE 1: LIVE WEATHER WIDGET ---
+            temp, cond = get_weather()
+            if temp:
+                st.info(f"🌤️ **Live Weather (Karachi):** {temp}°C | {cond}")
+                if "Rain" in cond:
+                    st.warning("⚠️ Rain Alert: Avoid spraying pesticides today!")
+            else:
+                st.caption("⚠️ Weather service unavailable.")
+
             st.title("🌿 Leaf Diagnostics")
             st.subheader("① Select Your Plant System")
             
@@ -240,6 +266,25 @@ def main_app():
                             go_predict(name)
                             st.rerun()
 
+            st.markdown("---")
+            
+            # --- FEATURE 2: GOOGLE MAPS STORE LOCATOR ---
+            st.subheader("📍 Find Agricultural Stores Nearby")
+            st.caption("Showing nearest Fertilizer & Pesticide shops")
+            # Embed Google Maps searching for 'agricultural stores'
+            map_html = """
+            <iframe 
+                width="100%" 
+                height="400" 
+                frameborder="0" 
+                scrolling="no" 
+                marginheight="0" 
+                marginwidth="0" 
+                src="https://maps.google.com/maps?q=agriculture+store+near+me&output=embed">
+            </iframe>
+            """
+            st.components.v1.html(map_html, height=400)
+            
             st.markdown("---")
             st.markdown("""
                 <div style='text-align: center; color: gray; padding: 20px;'>
@@ -261,9 +306,7 @@ def main_app():
             uploaded_file = st.file_uploader(f"Upload {current_crop} Leaf", type=['jpg','png','jpeg'])
             
             if uploaded_file:
-                # LAYOUT: Image Left, Results Right
                 col_left, col_right = st.columns([1, 1])
-                
                 image = Image.open(uploaded_file)
                 
                 with col_left:
@@ -307,19 +350,16 @@ def main_app():
                                 st.write("---")
                                 play_audio(info['disease_name'])
                                 
-                                # SAVE HISTORY WITH IMAGE
+                                # SAVE HISTORY
                                 user = st.session_state.user
                                 if user not in history_db: history_db[user] = []
-                                
-                                # Convert Image to Base64 String
                                 img_str = img_to_base64(image)
-                                
                                 history_db[user].append({
                                     "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                                     "crop": current_crop,
                                     "disease": info['disease_name'],
                                     "treatment": info['treatment'],
-                                    "image": img_str  # <--- SAVING IMAGE HERE
+                                    "image": img_str
                                 })
                                 save_data(HISTORY_FILE, history_db)
                             else:
@@ -353,20 +393,14 @@ def main_app():
 
             for item in reversed(display_items):
                 with st.container(border=True):
-                    # NEW LAYOUT: Image on Left, Text on Right
                     c_img, c_text = st.columns([1, 4])
-                    
                     with c_img:
                         if "image" in item:
                             try:
-                                # Convert text back to image
                                 recovered_img = base64_to_img(item["image"])
                                 st.image(recovered_img, use_container_width=True)
-                            except:
-                                st.error("Img Error")
-                        else:
-                            st.caption("No Image")
-                            
+                            except: st.error("Img Error")
+                        else: st.caption("No Image")
                     with c_text:
                         st.subheader(item['disease'])
                         st.caption(f"📅 {item['timestamp']} | Crop: {item['crop']}")
