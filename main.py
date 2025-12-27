@@ -168,6 +168,23 @@ with st.sidebar:
         st.write("Built by students of **Iqra University North Campus** to tackle agricultural challenges using MobileNet & Flutter.")
         
     st.markdown("---")
+    
+    # --- NEW DOWNLOAD BUTTON ---
+    st.subheader("📱 Mobile App")
+    
+    # Check if the file exists to prevent errors
+    if os.path.exists("app-release.apk"):
+        with open("app-release.apk", "rb") as apk_file:
+            st.download_button(
+                label="📥 Download Android APK",
+                data=apk_file,
+                file_name="Leaf_Doctor_v5.apk",
+                mime="application/vnd.android.package-archive",
+                help="Click to download the Android app. Install it to use Apollo AI offline!"
+            )
+    else:
+        st.warning("APK file not found on server.")
+        
     st.subheader("Settings")
     if st.toggle("🌙 Dark Mode", value=st.session_state.dark_mode):
         if not st.session_state.dark_mode: st.session_state.dark_mode = True; st.rerun()
