@@ -102,7 +102,7 @@ KNOWLEDGE_BASE = {
     "Potato Healthy": { "disease_name": "Healthy Potato Plant", "description": "Dark green, firm leaves.", "treatment": "Keep soil moist but drained." },
     "Potato Late Blight": { "disease_name": "Potato Late Blight", "description": "Water-soaked spots turning black.", "treatment": "Remove infected plants immediately." }
 }
-DARAZ_LINK = "https://www.daraz.pk/products/80-250-i161020707-s1327886846.html"
+DARAZ_LINK = "https://www.kissanghar.pk/"
 
 # --- 6. FUNCTIONS ---
 def get_weather():
@@ -175,7 +175,7 @@ def login_screen():
                 if username in users_db and users_db[username]['password'] == enc_pass:
                     st.session_state.logged_in = True
                     st.session_state.user = username
-                    st.toast("Welcome back!", icon="✅")
+                    st.toast("Welcome!", icon="✅")
                     time.sleep(0.5)
                     st.rerun()
                 else:
@@ -365,7 +365,7 @@ def main_app():
                                     """, unsafe_allow_html=True)
                                     
                                     # REMOVED CONFIDENCE DISPLAY & EXTRA BUTTONS
-                                    st.link_button("🛒 Buy Medicine (Daraz.pk)", DARAZ_LINK)
+                                    st.link_button("🛒 Buy Medicine", DARAZ_LINK)
                                     
                                     st.write("---")
                                     play_audio(info['disease_name'])
