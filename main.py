@@ -184,7 +184,11 @@ def login_screen():
             new_user = st.text_input("Choose Username", key="new_user")
             new_pass = st.text_input("Choose Password", type="password", key="new_pass")
             if st.button("✨ Create Account"):
-                if new_user in users_db:
+                # --- SECURITY FIX: PREVENT ADMIN SIGNUP ---
+                if new_user.lower() == "admin":
+                    st.error("⚠️ This username is reserved for the Administrator.")
+                    st.warning("Please choose a different username.")
+                elif new_user in users_db:
                     st.error("User already exists!")
                 elif len(new_pass) < 4:
                     st.error("Password too short.")
@@ -206,7 +210,7 @@ def main_app():
             st.rerun()
         st.divider()
         
-        # --- NEW: DYNAMIC MENU (Only shows Admin if user is 'admin') ---
+        # --- DYNAMIC MENU ---
         options = ["🏠 Home", "📜 My History"]
         if st.session_state.user == "admin":
             options.append("📊 Admin Dashboard")
