@@ -11,6 +11,7 @@ import json
 import hashlib
 import base64
 import requests
+import pandas as pd  # <--- NEW: For Tables & Filtering
 from utils.ai_brain import predict_disease
 
 # --- 1. CONFIGURATION ---
@@ -55,6 +56,8 @@ if 'internal_page' not in st.session_state: st.session_state.internal_page = 'ho
 if 'selected_crop' not in st.session_state: st.session_state.selected_crop = None
 if 'dark_mode' not in st.session_state: st.session_state.dark_mode = True
 if 'voice_lang' not in st.session_state: st.session_state.voice_lang = 'English'
+# NEW: Admin View Toggle
+if 'admin_mode' not in st.session_state: st.session_state.admin_mode = 'dashboard' 
 
 # --- 4. THEME ---
 if st.session_state.dark_mode:
@@ -184,10 +187,8 @@ def login_screen():
             new_user = st.text_input("Choose Username", key="new_user")
             new_pass = st.text_input("Choose Password", type="password", key="new_pass")
             if st.button("✨ Create Account"):
-                # --- SECURITY FIX: PREVENT ADMIN SIGNUP ---
                 if new_user.lower() == "admin":
                     st.error("⚠️ This username is reserved for the Administrator.")
-                    st.warning("Please choose a different username.")
                 elif new_user in users_db:
                     st.error("User already exists!")
                 elif len(new_pass) < 4:
@@ -429,42 +430,139 @@ def main_app():
                         st.caption(f"📅 {item['timestamp']} | Crop: {item['crop']}")
                         st.write(f"**Cure:** {item['treatment']}")
 
-    # --- NEW: ADMIN DASHBOARD TAB ---
+    # --- NEW: ADVANCED ADMIN DASHBOARD ---
     elif menu == "📊 Admin Dashboard":
         st.title("📊 Disease Surveillance Center")
-        st.caption("Restricted Access: Administrator Only")
         
-        all_history = []
-        for u in history_db:
-            all_history.extend(history_db[u])
+        # 1. MODE SELECTION (DASHBOARD vs TABLE)
+        if st.session_state.admin_mode == 'dashboard':
             
-        if not all_history:
-            st.warning("No data collected yet.")
-        else:
-            total_scans = len(all_history)
-            unique_users = len(history_db.keys())
-            st.metric("Total Scans Performed", total_scans)
-            st.metric("Active Farmers", unique_users)
+            # --- DASHBOARD VIEW ---
+            st.caption("Restricted Access: Administrator Only")
+            
+            # Prepare Metrics
+            all_history = []
+            for u in history_db:
+                all_history.extend(history_db[u])
+            
+            if not all_history:
+                st.warning("No data collected yet.")
+            else:
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Total Scans", len(all_history))
+                c2.metric("Active Users", len(history_db.keys()))
+                c3.metric("Last Scan", all_history[-1]['timestamp'])
+                
+                st.divider()
+                
+                # Charts
+                crop_counts = {}
+                disease_counts = {}
+                for h in all_history:
+                    c = h.get('crop', 'Unknown')
+                    crop_counts[c] = crop_counts.get(c, 0) + 1
+                    d = h.get('disease', 'Unknown')
+                    disease_counts[d] = disease_counts.get(d, 0) + 1
+                
+                chart1, chart2 = st.columns(2)
+                with chart1:
+                    st.subheader("Crop Distribution")
+                    st.bar_chart(crop_counts)
+                with chart2:
+                    st.subheader("Disease Analysis")
+                    st.bar_chart(disease_counts)
+
+            st.write("")
             st.divider()
+            # THE "REDIRECT" BUTTON
+            if st.button("📂 View Raw Database Records (Table View)", type="primary"):
+                st.session_state.admin_mode = 'table'
+                st.rerun()
+
+        elif st.session_state.admin_mode == 'table':
             
-            crop_counts = {}
-            disease_counts = {}
-            for h in all_history:
-                c = h.get('crop', 'Unknown')
-                crop_counts[c] = crop_counts.get(c, 0) + 1
-                d = h.get('disease', 'Unknown')
-                disease_counts[d] = disease_counts.get(d, 0) + 1
+            # --- TABLE VIEW (THE "PAGE") ---
+            col_head, col_btn = st.columns([4, 1])
+            with col_head: st.subheader("🗄️ Master Database Records")
+            with col_btn:
+                if st.button("← Back to Charts"):
+                    st.session_state.admin_mode = 'dashboard'
+                    st.rerun()
             
-            col1, col2 = st.columns(2)
-            with col1:
-                st.subheader("🔥 Most Scanned Crops")
-                st.bar_chart(crop_counts)
-            with col2:
-                st.subheader("🦠 Disease Outbreaks")
-                st.bar_chart(disease_counts)
+            # 1. Flatten Data for DataFrame
+            all_records = []
+            for user, history in history_db.items():
+                for record in history:
+                    rec = record.copy()
+                    rec['user'] = user
+                    # Convert Base64 to Data URI for ImageColumn
+                    if 'image' in rec:
+                        rec['image_display'] = f"data:image/jpeg;base64,{rec['image']}"
+                    else:
+                        rec['image_display'] = None
+                    all_records.append(rec)
             
-            with st.expander("🔍 View Raw Database Records"):
-                st.write(history_db)
+            if not all_records:
+                st.info("No records found.")
+            else:
+                df = pd.DataFrame(all_records)
+                
+                # 2. Sidebar Filters (Inside Admin View)
+                with st.sidebar:
+                    st.divider()
+                    st.subheader("🌪️ Table Filters")
+                    
+                    # Filter: Crops
+                    available_crops = list(df['crop'].unique()) if 'crop' in df.columns else []
+                    selected_crops = st.multiselect("Filter by Crop", available_crops, default=available_crops)
+                    
+                    # Filter: Date
+                    # Convert timestamp column to datetime objects for filtering
+                    df['dt_obj'] = pd.to_datetime(df['timestamp'])
+                    min_date = df['dt_obj'].min().date()
+                    max_date = df['dt_obj'].max().date()
+                    
+                    date_range = st.date_input("Filter by Date Range", [min_date, max_date])
+
+                # 3. Apply Filters
+                if 'crop' in df.columns:
+                    df = df[df['crop'].isin(selected_crops)]
+                
+                if len(date_range) == 2:
+                    start_d, end_d = date_range
+                    df = df[(df['dt_obj'].dt.date >= start_d) & (df['dt_obj'].dt.date <= end_d)]
+                
+                # 4. Display Table
+                st.write(f"Showing {len(df)} records.")
+                
+                # Define columns to show
+                cols_to_show = ['timestamp', 'user', 'crop', 'disease', 'image_display']
+                
+                st.dataframe(
+                    df[cols_to_show],
+                    column_config={
+                        "image_display": st.column_config.ImageColumn("Leaf Image", help="Scan Thumbnail"),
+                        "timestamp": "Time",
+                        "user": "Farmer Name",
+                        "crop": "Crop Type",
+                        "disease": "Diagnosis"
+                    },
+                    use_container_width=True,
+                    height=500
+                )
+                
+                # 5. Download Button
+                # Create a clean CSV without the massive image strings
+                clean_df = df.drop(columns=['image', 'image_display', 'dt_obj'], errors='ignore')
+                csv = clean_df.to_csv(index=False).encode('utf-8')
+                
+                st.download_button(
+                    label="📥 Download Filtered Report (CSV)",
+                    data=csv,
+                    file_name="leaf_doctor_report.csv",
+                    mime="text/csv",
+                    type="primary"
+                )
 
 # --- 9. MASTER CONTROL ---
 if st.session_state.logged_in:
