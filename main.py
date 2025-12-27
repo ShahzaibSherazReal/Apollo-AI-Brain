@@ -10,7 +10,7 @@ import os
 import json
 import hashlib
 import base64
-import requests  # <--- NEW: For Weather API
+import requests
 from utils.ai_brain import predict_disease
 
 # --- 1. CONFIGURATION ---
@@ -36,7 +36,7 @@ def save_data(file, data):
 def hash_password(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
 
-# --- IMAGE CONVERSION HELPERS ---
+# --- IMAGE HELPERS ---
 def img_to_base64(image):
     buffered = io.BytesIO()
     image.save(buffered, format="JPEG")
@@ -106,20 +106,15 @@ DARAZ_LINK = "https://www.daraz.pk/products/80-250-i161020707-s1327886846.html"
 
 # --- 6. FUNCTIONS ---
 def get_weather():
-    """Fetches real-time weather for Karachi (default) using Open-Meteo API"""
     try:
-        # Coordinates for Karachi (You can change these to any city)
         lat, lon = 24.8607, 67.0011 
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
         response = requests.get(url).json()
         temp = response['current_weather']['temperature']
         wcode = response['current_weather']['weathercode']
-        
-        # Simple Weather Code Interpretation
         if wcode <= 3: condition = "Sunny/Clear ☀️"
         elif wcode <= 49: condition = "Cloudy/Foggy ☁️"
         else: condition = "Rainy/Stormy 🌧️"
-        
         return temp, condition
     except:
         return None, None
@@ -203,7 +198,6 @@ def login_screen():
 
 # --- 8. MAIN APPLICATION ---
 def main_app():
-    # SIDEBAR
     with st.sidebar:
         st.write(f"👤 **{st.session_state.user}**")
         if st.button("🚪 Logout"):
@@ -243,7 +237,7 @@ def main_app():
         
         if st.session_state.internal_page == 'home':
             
-            # --- FEATURE 1: LIVE WEATHER WIDGET ---
+            # WEATHER WIDGET
             temp, cond = get_weather()
             if temp:
                 st.info(f"🌤️ **Live Weather (Karachi):** {temp}°C | {cond}")
@@ -268,10 +262,9 @@ def main_app():
 
             st.markdown("---")
             
-            # --- FEATURE 2: GOOGLE MAPS STORE LOCATOR ---
+            # MAPS
             st.subheader("📍 Find Agricultural Stores Nearby")
             st.caption("Showing nearest Fertilizer & Pesticide shops")
-            # Embed Google Maps searching for 'agricultural stores'
             map_html = """
             <iframe 
                 width="100%" 
@@ -303,15 +296,24 @@ def main_app():
                 st.title(f"{st.session_state.selected_crop} Diagnostics")
             
             current_crop = st.session_state.selected_crop
-            uploaded_file = st.file_uploader(f"Upload {current_crop} Leaf", type=['jpg','png','jpeg'])
             
-            if uploaded_file:
+            tab_cam, tab_upload = st.tabs(["📸 Take Photo", "📂 Upload from Gallery"])
+            final_image = None
+
+            with tab_cam:
+                cam_img = st.camera_input(f"Take a picture of {current_crop}")
+                if cam_img: final_image = Image.open(cam_img)
+
+            with tab_upload:
+                upload_img = st.file_uploader(f"Upload {current_crop} Image", type=['jpg','png','jpeg'])
+                if upload_img: final_image = Image.open(upload_img)
+
+            if final_image:
                 col_left, col_right = st.columns([1, 1])
-                image = Image.open(uploaded_file)
                 
                 with col_left:
                     scan_img_placeholder = st.empty()
-                    scan_img_placeholder.image(image, caption="Specimen", use_container_width=True)
+                    scan_img_placeholder.image(final_image, caption="Specimen", use_container_width=True)
                     st.write("")
                     scan_btn = st.button("INITIATE DEEP SCAN", type="primary", use_container_width=True)
 
@@ -320,50 +322,63 @@ def main_app():
                     results_placeholder = st.empty()
 
                 if scan_btn:
-                    heavy_duty_scan(scan_img_placeholder, graph_placeholder, image)
-                    scan_img_placeholder.image(image, caption="Specimen", use_container_width=True)
+                    heavy_duty_scan(scan_img_placeholder, graph_placeholder, final_image)
+                    scan_img_placeholder.image(final_image, caption="Specimen", use_container_width=True)
                     graph_placeholder.empty()
                     
-                    result = predict_disease(image)
+                    result = predict_disease(final_image)
                     
                     if "error" in result:
                         results_placeholder.error(result['error'])
                     else:
-                        pred_class = result['class']
-                        conf = result['confidence']
-                        clean_name = pred_class.replace("_", " ").lower()
-                        info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
-                        
-                        with results_placeholder.container():
-                            if info:
-                                st.success(f"Result: {info['disease_name']}")
-                                st.info(f"Confidence: {conf}")
-                                st.markdown(f"""
-                                <div style="background-color: {card_bg}; padding: 15px; border-radius: 10px; border-left: 5px solid #4CAF50;">
-                                    <h4>Diagnosis</h4>
-                                    <p>{info['description']}</p>
-                                    <h4>Treatment</h4>
-                                    <p>{info['treatment']}</p>
-                                </div>
-                                """, unsafe_allow_html=True)
-                                st.link_button("🛒 Buy Medicine (Daraz.pk)", DARAZ_LINK)
-                                st.write("---")
-                                play_audio(info['disease_name'])
-                                
-                                # SAVE HISTORY
-                                user = st.session_state.user
-                                if user not in history_db: history_db[user] = []
-                                img_str = img_to_base64(image)
-                                history_db[user].append({
-                                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                    "crop": current_crop,
-                                    "disease": info['disease_name'],
-                                    "treatment": info['treatment'],
-                                    "image": img_str
-                                })
-                                save_data(HISTORY_FILE, history_db)
-                            else:
-                                st.warning(f"Detected {pred_class}, but no medical info found.")
+                        # --- NEW: CONFIDENCE CHECK (REJECTION LOGIC) ---
+                        try:
+                            # Convert "95.5%" string to 95.5 float
+                            conf_val = float(str(result['confidence']).replace('%',''))
+                        except:
+                            conf_val = 0.0
+
+                        # RULE: If confidence is below 50%, REJECT IT.
+                        if conf_val < 50.0:
+                            results_placeholder.error(f"⚠️ ERROR: This does not look like a {current_crop} leaf.")
+                            results_placeholder.warning(f"Confidence is too low ({result['confidence']}). Diagnosis rejected.")
+                            # Note: We do NOT save to history here.
+                        else:
+                            # Proceed with result if valid
+                            pred_class = result['class']
+                            clean_name = pred_class.replace("_", " ").lower()
+                            info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
+                            
+                            with results_placeholder.container():
+                                if info:
+                                    st.success(f"Result: {info['disease_name']}")
+                                    st.info(f"Confidence: {result['confidence']}")
+                                    st.markdown(f"""
+                                    <div style="background-color: {card_bg}; padding: 15px; border-radius: 10px; border-left: 5px solid #4CAF50;">
+                                        <h4>Diagnosis</h4>
+                                        <p>{info['description']}</p>
+                                        <h4>Treatment</h4>
+                                        <p>{info['treatment']}</p>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    st.link_button("🛒 Buy Medicine (Daraz.pk)", DARAZ_LINK)
+                                    st.write("---")
+                                    play_audio(info['disease_name'])
+                                    
+                                    # SAVE HISTORY (Only happens if > 50% confidence)
+                                    user = st.session_state.user
+                                    if user not in history_db: history_db[user] = []
+                                    img_str = img_to_base64(final_image)
+                                    history_db[user].append({
+                                        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                        "crop": current_crop,
+                                        "disease": info['disease_name'],
+                                        "treatment": info['treatment'],
+                                        "image": img_str
+                                    })
+                                    save_data(HISTORY_FILE, history_db)
+                                else:
+                                    st.warning(f"Detected {pred_class}, but no medical info found.")
 
     # --- HISTORY TAB ---
     elif menu == "📜 My History":
