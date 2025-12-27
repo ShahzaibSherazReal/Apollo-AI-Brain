@@ -297,6 +297,7 @@ def main_app():
             
             current_crop = st.session_state.selected_crop
             
+            # TABS: CAMERA vs UPLOAD
             tab_cam, tab_upload = st.tabs(["📸 Take Photo", "📂 Upload from Gallery"])
             final_image = None
 
@@ -331,54 +332,54 @@ def main_app():
                     if "error" in result:
                         results_placeholder.error(result['error'])
                     else:
-                        # --- NEW: CONFIDENCE CHECK (REJECTION LOGIC) ---
+                        pred_class = result['class']
+                        clean_name = pred_class.replace("_", " ").lower()
+                        info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
+                        
+                        # --- SAFE LOGIC (NO BLOCKING) ---
+                        # We try to check confidence just to show a warning, but we do NOT stop the process.
                         try:
-                            # Convert "95.5%" string to 95.5 float
-                            conf_val = float(str(result['confidence']).replace('%',''))
+                            val_str = str(result['confidence']).replace('%','').strip()
+                            conf_score = float(val_str)
+                            # If it looks like decimal 0.98, convert to 98
+                            if conf_score <= 1.0: conf_score *= 100
                         except:
-                            conf_val = 0.0
+                            conf_score = 100.0 # Assume high if parsing fails
 
-                        # RULE: If confidence is below 50%, REJECT IT.
-                        if conf_val < 50.0:
-                            results_placeholder.error(f"⚠️ ERROR: This does not look like a {current_crop} leaf.")
-                            results_placeholder.warning(f"Confidence is too low ({result['confidence']}). Diagnosis rejected.")
-                            # Note: We do NOT save to history here.
-                        else:
-                            # Proceed with result if valid
-                            pred_class = result['class']
-                            clean_name = pred_class.replace("_", " ").lower()
-                            info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
-                            
-                            with results_placeholder.container():
-                                if info:
-                                    st.success(f"Result: {info['disease_name']}")
-                                    st.info(f"Confidence: {result['confidence']}")
-                                    st.markdown(f"""
-                                    <div style="background-color: {card_bg}; padding: 15px; border-radius: 10px; border-left: 5px solid #4CAF50;">
-                                        <h4>Diagnosis</h4>
-                                        <p>{info['description']}</p>
-                                        <h4>Treatment</h4>
-                                        <p>{info['treatment']}</p>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-                                    st.link_button("🛒 Buy Medicine (Daraz.pk)", DARAZ_LINK)
-                                    st.write("---")
-                                    play_audio(info['disease_name'])
-                                    
-                                    # SAVE HISTORY (Only happens if > 50% confidence)
-                                    user = st.session_state.user
-                                    if user not in history_db: history_db[user] = []
-                                    img_str = img_to_base64(final_image)
-                                    history_db[user].append({
-                                        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                        "crop": current_crop,
-                                        "disease": info['disease_name'],
-                                        "treatment": info['treatment'],
-                                        "image": img_str
-                                    })
-                                    save_data(HISTORY_FILE, history_db)
-                                else:
-                                    st.warning(f"Detected {pred_class}, but no medical info found.")
+                        with results_placeholder.container():
+                            # Soft Warning for wrong crops (Does not block)
+                            if conf_score < 40.0:
+                                st.warning(f"⚠️ Low Confidence ({int(conf_score)}%). This might not be a {current_crop} leaf.")
+
+                            if info:
+                                st.success(f"Result: {info['disease_name']}")
+                                st.info(f"Confidence: {result['confidence']}")
+                                st.markdown(f"""
+                                <div style="background-color: {card_bg}; padding: 15px; border-radius: 10px; border-left: 5px solid #4CAF50;">
+                                    <h4>Diagnosis</h4>
+                                    <p>{info['description']}</p>
+                                    <h4>Treatment</h4>
+                                    <p>{info['treatment']}</p>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                st.link_button("🛒 Buy Medicine (Daraz.pk)", DARAZ_LINK)
+                                st.write("---")
+                                play_audio(info['disease_name'])
+                                
+                                # SAVE HISTORY
+                                user = st.session_state.user
+                                if user not in history_db: history_db[user] = []
+                                img_str = img_to_base64(final_image)
+                                history_db[user].append({
+                                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                    "crop": current_crop,
+                                    "disease": info['disease_name'],
+                                    "treatment": info['treatment'],
+                                    "image": img_str
+                                })
+                                save_data(HISTORY_FILE, history_db)
+                            else:
+                                st.warning(f"Detected {pred_class}, but no medical info found.")
 
     # --- HISTORY TAB ---
     elif menu == "📜 My History":
