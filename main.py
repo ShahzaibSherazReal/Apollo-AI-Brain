@@ -181,13 +181,24 @@ with st.sidebar:
 if st.session_state.page == 'home':
     st.title("🌿 Leaf Disease Detection (v5.0)")
     st.subheader("① Select Your Plant System")
+    
     col1, col2, col3 = st.columns(3)
     crops = [("🍎", "Apple"), ("🌽", "Corn"), ("🥔", "Potato")]
+    
     for idx, (emoji, name) in enumerate(crops):
         with [col1, col2, col3][idx]:
             with st.container(border=True):
                 st.markdown(f"<h1 style='text-align:center;'>{emoji}</h1><h3 style='text-align:center;'>{name}</h3>", unsafe_allow_html=True)
                 if st.button(f"Select {name}", key=f"btn_{name}"): navigate_to('predict', name)
+
+    # --- NEW ADDITION BELOW ---
+    st.markdown("---")
+    st.markdown("""
+        <div style='text-align: center; color: gray; padding: 20px;'>
+            <h3>🚀 More crops coming soon...</h3>
+            <p>We are currently training models for Tomato, Grape, and Wheat.</p>
+        </div>
+    """, unsafe_allow_html=True)
 
 # --- 7. HISTORY PAGE ---
 elif st.session_state.page == 'history':
