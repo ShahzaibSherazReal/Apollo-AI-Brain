@@ -4,67 +4,70 @@ import time
 import random
 import datetime
 import numpy as np
-from gtts import gTTS  # Library for Voice
+from gtts import gTTS
 import io
-import pickle  # <--- NEW: For saving history
-import os      # <--- NEW: For checking file existence
+import os
+import json
+import hashlib
 from utils.ai_brain import predict_disease
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="Leaf Disease Detection", page_icon="🌿", layout="wide")
+st.set_page_config(page_title="Leaf Doctor", page_icon="🌿", layout="wide")
 
-# --- HISTORY PERSISTENCE HELPER FUNCTIONS ---
-HISTORY_FILE = "scan_history.pkl"
+# --- 2. DATABASE & AUTH SYSTEM ---
+USERS_FILE = "users.json"
+HISTORY_FILE = "history.json"
 
-def load_history():
-    """Loads history from the pickle file if it exists."""
-    if os.path.exists(HISTORY_FILE):
+def load_data(file, default_data):
+    if os.path.exists(file):
         try:
-            with open(HISTORY_FILE, "rb") as f:
-                return pickle.load(f)
+            with open(file, "r") as f:
+                return json.load(f)
         except:
-            return []  # Return empty if file is corrupt
-    return []
+            return default_data
+    return default_data
 
-def save_history(history_list):
-    """Saves the current history list to a pickle file."""
-    with open(HISTORY_FILE, "wb") as f:
-        pickle.dump(history_list, f)
+def save_data(file, data):
+    with open(file, "w") as f:
+        json.dump(data, f, indent=4)
 
-# --- 2. SESSION STATE & THEME ---
-if 'dark_mode' not in st.session_state: st.session_state.dark_mode = True
+def hash_password(password):
+    return hashlib.sha256(str.encode(password)).hexdigest()
+
+users_db = load_data(USERS_FILE, {})
+history_db = load_data(HISTORY_FILE, {})
+
+# --- 3. SESSION STATE ---
+if 'logged_in' not in st.session_state: st.session_state.logged_in = False
+if 'user' not in st.session_state: st.session_state.user = None
 if 'page' not in st.session_state: st.session_state.page = 'home'
-if 'selected_crop' not in st.session_state: st.session_state.selected_crop = None
+if 'dark_mode' not in st.session_state: st.session_state.dark_mode = True
 if 'voice_lang' not in st.session_state: st.session_state.voice_lang = 'English'
 
-# Initialize Scan History (Load from file instead of empty list)
-if 'scan_history' not in st.session_state: 
-    st.session_state.scan_history = load_history()
-
-# Dynamic Colors
+# --- 4. THEME ---
 if st.session_state.dark_mode:
-    app_bg, sidebar_bg, card_bg, text_col, border_col, btn_bg = "#000000", "#000000", "#121212", "#E0E0E0", "#333333", "#2b2b2b"
+    app_bg, sidebar_bg, card_bg, text_col, btn_bg = "#0e1117", "#262730", "#1E1E1E", "#FAFAFA", "#2b2b2b"
 else:
-    app_bg, sidebar_bg, card_bg, text_col, border_col, btn_bg = "#FFFFFF", "#F8F9FA", "#F0F2F6", "#000000", "#DDDDDD", "#E0E0E0"
+    app_bg, sidebar_bg, card_bg, text_col, btn_bg = "#FFFFFF", "#F0F2F6", "#F9F9F9", "#000000", "#E0E0E0"
 
 st.markdown(f"""
 <style>
-    .stApp {{ background-color: {app_bg}; }}
-    section[data-testid="stSidebar"] {{ background-color: {sidebar_bg}; }}
-    .stButton>button {{ width: 100%; border-radius: 5px; height: 3em; background-color: {btn_bg}; color: {text_col}; border: 1px solid #4CAF50; }}
-    div[data-testid="stVerticalBlockBorderWrapper"] {{ background-color: {card_bg}; border: 1px solid {border_col}; border-radius: 10px; padding: 10px; }}
-    h1, h2, h3, h4, h5, h6, p, div, span, li, label {{ color: {text_col} !important; }}
+    .stApp {{ background-color: {app_bg}; color: {text_col}; }}
+    [data-testid="stSidebar"] {{ background-color: {sidebar_bg}; }}
+    .stButton>button {{ width: 100%; border-radius: 8px; background-color: {btn_bg}; color: {text_col}; border: 1px solid #4CAF50; }}
+    div[data-testid="stVerticalBlockBorderWrapper"] {{ background-color: {card_bg}; border-radius: 10px; padding: 15px; border: 1px solid #333; }}
+    h1, h2, h3, h4, h5, h6, p, label {{ color: {text_col} !important; }}
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA & TRANSLATIONS ---
+# --- 5. KNOWLEDGE BASE & TRANSLATIONS ---
 ALLOWED_CLASSES = {
     "Apple": ["apple_black_rot", "apple_healthy", "apple_scab"],
     "Corn": ["corn_common_rust", "corn_healthy", "corn_leaf_blight"],
     "Potato": ["potato_early_blight", "potato_healthy", "potato_late_blight"]
 }
 
-# [URDU DICTIONARY]
+# [RESTORED] Full Urdu Dictionary
 URDU_MESSAGES = {
     "Apple Black Rot": "Aap kay seb kay poday ko Black Rot ki beemari hai. Iska jald ilaaj karein.",
     "Apple Healthy": "Mubarak ho! Aap ka seb ka poda bilkul sehat mand hai.",
@@ -88,15 +91,9 @@ KNOWLEDGE_BASE = {
     "Potato Healthy": { "disease_name": "Healthy Potato Plant", "description": "Dark green, firm leaves.", "treatment": "Keep soil moist but drained." },
     "Potato Late Blight": { "disease_name": "Potato Late Blight", "description": "Water-soaked spots turning black.", "treatment": "Remove infected plants immediately." }
 }
+DARAZ_LINK = "https://www.daraz.pk/products/80-250-i161020707-s1327886846.html?c=&channelLpJumpArgs=&clickTrackInfo=query%253Aplant%252Bmedicine%253Bnid%253A161020707%253Bsrc%253ALazadaMainSrp%253Brn%253Ab527139b39060e79edd6c480bd9f8b9d%253Bregion%253Apk%253Bsku%253A161020707_PK%253Bprice%253A299%253Bclient%253Adesktop%253Bsupplier_id%253A1092256%253Bbiz_source%253Ah5_external%253Bslot%253A15%253Butlog_bucket_id%253A470687%253Basc_category_id%253A10000723%253Bitem_id%253A161020707%253Bsku_id%253A1327886846%253Bshop_id%253A203291%253BtemplateInfo%253A&freeshipping=0&fs_ab=1&fuse_fs=&lang=en&location=Punjab&price=299&priceCompare=skuId%3A1327886846%3Bsource%3Alazada-search-voucher%3Bsn%3Ab527139b39060e79edd6c480bd9f8b9d%3BoriginPrice%3A29900%3BdisplayPrice%3A29900%3BsinglePromotionId%3A-1%3BsingleToolCode%3AmockedSalePrice%3BvoucherPricePlugin%3A0%3Btimestamp%3A1766411452314&ratingscore=4.5683060109289615&request_id=b527139b39060e79edd6c480bd9f8b9d&review=183&sale=874&search=1&source=search&spm=a2a0e.searchlist.list.15&stock=1"
 
-# [TARGET PRODUCT LINK]
-DARAZ_PRODUCT_LINK = "https://www.daraz.pk/products/80-250-i161020707-s1327886846.html?c=&channelLpJumpArgs=&clickTrackInfo=query%253Aplant%252Bmedicine%253Bnid%253A161020707%253Bsrc%253ALazadaMainSrp%253Brn%253Ab527139b39060e79edd6c480bd9f8b9d%253Bregion%253Apk%253Bsku%253A161020707_PK%253Bprice%253A299%253Bclient%253Adesktop%253Bsupplier_id%253A1092256%253Bbiz_source%253Ah5_external%253Bslot%253A15%253Butlog_bucket_id%253A470687%253Basc_category_id%253A10000723%253Bitem_id%253A161020707%253Bsku_id%253A1327886846%253Bshop_id%253A203291%253BtemplateInfo%253A&freeshipping=0&fs_ab=1&fuse_fs=&lang=en&location=Punjab&price=299&priceCompare=skuId%3A1327886846%3Bsource%3Alazada-search-voucher%3Bsn%3Ab527139b39060e79edd6c480bd9f8b9d%3BoriginPrice%3A29900%3BdisplayPrice%3A29900%3BsinglePromotionId%3A-1%3BsingleToolCode%3AmockedSalePrice%3BvoucherPricePlugin%3A0%3Btimestamp%3A1766411452314&ratingscore=4.5683060109289615&request_id=b527139b39060e79edd6c480bd9f8b9d&review=183&sale=874&search=1&source=search&spm=a2a0e.searchlist.list.15&stock=1"
-
-def navigate_to(page, crop=None):
-    st.session_state.page = page
-    st.session_state.selected_crop = crop
-
-# --- 4. HELPER FUNCTIONS ---
+# --- 6. FUNCTIONS ---
 def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
     img = original_img.copy().convert("RGBA")
     width, height = img.size
@@ -110,231 +107,215 @@ def heavy_duty_scan(image_placeholder, graph_placeholder, original_img):
         draw = ImageDraw.Draw(frame)
         scan_y = i if i < height else height - 1
         draw.line([(0, scan_y), (width, scan_y)], fill=(0, 255, 0, 200), width=5)
-        image_placeholder.image(frame, caption="🔍 SCANNING CELLULAR STRUCTURE...", use_container_width=True)
+        image_placeholder.image(frame, caption="🔍 ANALYZING...", use_container_width=True)
         with graph_placeholder.container():
             g1, g2 = st.columns(2)
             g1.line_chart([random.randint(10, 100) for _ in range(20)], height=100)
             g2.progress(min(i / height, 1.0))
-        time.sleep(0.05)
+        time.sleep(0.02)
 
-# [VOICE FUNCTION - ENGLISH & URDU]
-def play_voice_feedback(disease_name):
-    lang_code = 'ur' if st.session_state.voice_lang == 'Urdu' else 'en'
-    
-    if lang_code == 'ur':
-        text_to_speak = URDU_MESSAGES.get(disease_name, "Beemari ki tashkhees ho gayi hai.")
-    else:
-        text_to_speak = f"Alert. {disease_name} detected."
-
+def play_audio(disease_name):
     try:
-        tts = gTTS(text=text_to_speak, lang=lang_code)
-        audio_buffer = io.BytesIO()
-        tts.write_to_fp(audio_buffer)
-        st.audio(audio_buffer, format='audio/mp3', start_time=0)
-    except Exception as e:
-        st.warning("⚠️ Audio unavailable (No Internet?)")
-
-# --- 5. SIDEBAR ---
-with st.sidebar:
-    st.title("Leaf Disease Detection")
-    
-    if st.button("🏠 Return Home"):
-        navigate_to('home')
-        st.rerun()
-
-    if st.button("📜 History Log"):
-        navigate_to('history')
-        st.rerun()
-
-    st.markdown("---")
-    
-    # [VOICE SETTINGS]
-    st.subheader("🔊 Audio Settings")
-    st.session_state.voice_lang = st.radio("Voice Language:", ["English", "Urdu"], horizontal=True)
-
-    st.markdown("---")
-    
-    with st.expander("🌱 Tips for Gardening"):
-        st.markdown("""
-        * **Watering:** Water early in the morning.
-        * **Soil:** Ensure good drainage.
-        * **Sunlight:** At least 6 hours direct sun.
-        """)
-
-    with st.expander("🎯 About Us"):
-        st.write("Bridging AI & Agriculture. Empowering farmers with instant diagnostics.")
-
-    with st.expander("📖 Our Story"):
-        st.write("Built by students of **Iqra University North Campus** to tackle agricultural challenges using MobileNet & Flutter.")
-        
-    st.markdown("---")
-    
-    # --- NEW DOWNLOAD BUTTON ---
-    st.subheader("📱 Mobile App")
-    
-    # Check if the file exists to prevent errors
-    if os.path.exists("app-release.apk"):
-        with open("app-release.apk", "rb") as apk_file:
-            st.download_button(
-                label="📥 Download Android APK",
-                data=apk_file,
-                file_name="Leaf_Doctor_v5.apk",
-                mime="application/vnd.android.package-archive",
-                help="Click to download the Android app. Install it to use Apollo AI offline!"
-            )
-    else:
-        st.warning("APK file not found on server.")
-        
-    st.subheader("Settings")
-    if st.toggle("🌙 Dark Mode", value=st.session_state.dark_mode):
-        if not st.session_state.dark_mode: st.session_state.dark_mode = True; st.rerun()
-    else:
-        if st.session_state.dark_mode: st.session_state.dark_mode = False; st.rerun()
-
-    st.success("🟢 Neural Engine Online")
-    st.caption("v5.0 - Final Production Build")
-
-# --- 6. HOME PAGE ---
-if st.session_state.page == 'home':
-    st.title("🌿 Leaf Disease Detection (v5.0)")
-    st.subheader("① Select Your Plant System")
-    
-    col1, col2, col3 = st.columns(3)
-    crops = [("🍎", "Apple"), ("🌽", "Corn"), ("🥔", "Potato")]
-    
-    for idx, (emoji, name) in enumerate(crops):
-        with [col1, col2, col3][idx]:
-            with st.container(border=True):
-                st.markdown(f"<h1 style='text-align:center;'>{emoji}</h1><h3 style='text-align:center;'>{name}</h3>", unsafe_allow_html=True)
-                if st.button(f"Select {name}", key=f"btn_{name}"): navigate_to('predict', name)
-
-    # --- NEW ADDITION BELOW ---
-    st.markdown("---")
-    st.markdown("""
-        <div style='text-align: center; color: gray; padding: 20px;'>
-            <h3>🚀 More crops coming soon...</h3>
-            <p>We are currently training models for Tomato, Grape, and Wheat.</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-# --- 7. HISTORY PAGE ---
-elif st.session_state.page == 'history':
-    st.title("📜 Scan Log")
-    col_filter1, col_filter2, col_action = st.columns([2, 2, 2])
-    with col_filter1: filter_crop = st.selectbox("Filter by Crop:", ["All", "Apple", "Corn", "Potato"])
-    with col_filter2:
-        use_date = st.toggle("Filter by Date")
-        filter_date = st.date_input("Select Date", datetime.date.today()) if use_date else None
-    with col_action:
-        st.write("")
-        if st.button("🗑️ Clear All History", type="primary"):
-            st.session_state.scan_history = []
-            save_history([])  # <--- SAVE EMPTY HISTORY
-            st.rerun()
-
-    st.markdown("---")
-
-    if not st.session_state.scan_history:
-        st.info("No scans recorded yet.")
-    else:
-        display_items = []
-        for index, item in enumerate(st.session_state.scan_history):
-            if filter_crop != "All" and item['crop'] != filter_crop: continue
-            if filter_date:
-                if item['timestamp'].split(" ")[0] != str(filter_date): continue
-            display_items.append((index, item))
-
-        for original_index, scan in reversed(display_items):
-            with st.container(border=True):
-                c1, c2, c3 = st.columns([1, 4, 1])
-                with c1: st.image(scan['image'], width=100)
-                with c2:
-                    st.subheader(f"{scan['disease_name']}")
-                    st.caption(f"📅 {scan['timestamp']} | Crop: {scan['crop']}")
-                    st.write(f"**💊 Cure:** {scan['treatment']}")
-                with c3:
-                    st.write("")
-                    if st.button("🗑️", key=f"del_{original_index}"):
-                        st.session_state.scan_history.pop(original_index)
-                        save_history(st.session_state.scan_history)  # <--- SAVE UPDATED HISTORY
-                        st.rerun()
-
-# --- 8. PREDICTION PAGE ---
-elif st.session_state.page == 'predict':
-    col_back, col_title = st.columns([1, 8])
-    with col_back:
-        if st.button("← Back"): navigate_to('home')
-    with col_title:
-        st.title(f"{st.session_state.selected_crop} Diagnostics")
-
-    uploaded_file = st.file_uploader(f"Upload {st.session_state.selected_crop} Leaf", type=["jpg", "png", "jpeg"])
-    
-    if uploaded_file is not None:
-        col1, col2 = st.columns([1, 1])
-        image = Image.open(uploaded_file)
-        with col1:
-            scan_placeholder = st.empty()
-            scan_placeholder.image(image, caption="Original Specimen", use_container_width=True)
-        with col2:
-            graph_placeholder = st.empty()
-            results_placeholder = st.empty()
-
-        if st.button("INITIATE DEEP SCAN"):
-            heavy_duty_scan(scan_placeholder, graph_placeholder, image)
-            graph_placeholder.empty()
+        lang = 'ur' if st.session_state.voice_lang == 'Urdu' else 'en'
+        # [RESTORED] Check dictionary for specific Urdu message
+        if lang == 'ur':
+            text = URDU_MESSAGES.get(disease_name, "Beemari ki tashkhees ho gayi hai.")
+        else:
+            text = f"Alert. {disease_name} detected."
             
-            result = predict_disease(image)
-            
-            if "error" in result:
-                results_placeholder.error("❌ " + result["error"])
-            else:
-                prediction_key = result["class"]
-                confidence_str = result["confidence"].replace('%', '')
-                confidence_val = float(confidence_str)
-                current_section = st.session_state.selected_crop
-                valid_keys = ALLOWED_CLASSES.get(current_section, [])
+        tts = gTTS(text=text, lang=lang)
+        buf = io.BytesIO()
+        tts.write_to_fp(buf)
+        st.audio(buf, format='audio/mp3', start_time=0)
+    except: pass
 
-                if prediction_key not in valid_keys:
-                    with results_placeholder.container():
-                        st.error("⚠️ WRONG LEAF DETECTED")
-                        st.markdown(f"Analysis Rejected. Expected {current_section}, got {prediction_key.replace('_',' ')}.")
-                
-                elif confidence_val < 20.0:
-                    with results_placeholder.container():
-                        st.warning(f"⚠️ Low Confidence Alert ({confidence_val}%)")
-                        st.info("Image unclear.")
-
+# --- 7. LOGIN SCREEN ---
+def login_screen():
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.title("🌿 Leaf Doctor")
+        st.subheader("Authentication")
+        
+        tab1, tab2 = st.tabs(["Login", "Sign Up"])
+        with tab1:
+            username = st.text_input("Username", key="login_user")
+            password = st.text_input("Password", type="password", key="login_pass")
+            if st.button("🚀 Login", type="primary"):
+                enc_pass = hash_password(password)
+                if username in users_db and users_db[username]['password'] == enc_pass:
+                    st.session_state.logged_in = True
+                    st.session_state.user = username
+                    st.toast("Welcome back!", icon="✅")
+                    time.sleep(0.5)
+                    st.rerun()
                 else:
-                    clean_name = prediction_key.replace("_", " ").lower()
-                    found_info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
+                    st.error("Invalid Username or Password")
+        with tab2:
+            new_user = st.text_input("Choose Username", key="new_user")
+            new_pass = st.text_input("Choose Password", type="password", key="new_pass")
+            if st.button("✨ Create Account"):
+                if new_user in users_db:
+                    st.error("User already exists!")
+                elif len(new_pass) < 4:
+                    st.error("Password too short.")
+                else:
+                    users_db[new_user] = {
+                        "password": hash_password(new_pass),
+                        "joined": str(datetime.date.today())
+                    }
+                    save_data(USERS_FILE, users_db)
+                    st.success("Account Created! Please Login.")
+
+# --- 8. MAIN APPLICATION ---
+def main_app():
+    # SIDEBAR
+    with st.sidebar:
+        st.write(f"👤 **{st.session_state.user}**")
+        if st.button("🚪 Logout"):
+            st.session_state.logged_in = False
+            st.rerun()
+        st.divider()
+        menu = st.radio("Navigation", ["Home", "My History", "Settings"])
+        st.divider()
+        
+        # [RESTORED] Sidebar Expanders
+        with st.expander("🌱 Tips for Gardening"):
+            st.markdown("""
+            * **Watering:** Water early in the morning.
+            * **Soil:** Ensure good drainage.
+            * **Sunlight:** At least 6 hours direct sun.
+            """)
+        with st.expander("🎯 About Us"):
+            st.write("Bridging AI & Agriculture. Empowering farmers with instant diagnostics.")
+        with st.expander("📖 Our Story"):
+            st.write("Built by students of **Iqra University North Campus** to tackle agricultural challenges using MobileNet & Flutter.")
+
+        st.divider()
+        st.write("📱 **Mobile App**")
+        if os.path.exists("app-release.apk"):
+            with open("app-release.apk", "rb") as f:
+                st.download_button("📥 Download APK", f, "LeafDoctor.apk", "application/vnd.android.package-archive")
+
+    # HOME PAGE
+    if menu == "Home":
+        st.title(f"🌿 Leaf Diagnostics")
+        col1, col2, col3 = st.columns(3)
+        crops = [("🍎", "Apple"), ("🌽", "Corn"), ("🥔", "Potato")]
+        
+        if 'selected_crop' not in st.session_state: st.session_state.selected_crop = "Apple"
+        
+        for idx, (emoji, name) in enumerate(crops):
+            with [col1, col2, col3][idx]:
+                if st.button(f"{emoji} {name}", key=f"btn_{name}", use_container_width=True):
+                    st.session_state.selected_crop = name
+        
+        st.divider()
+        current_crop = st.session_state.selected_crop
+        st.subheader(f"Analyzing: {current_crop}")
+        
+        uploaded_file = st.file_uploader(f"Upload {current_crop} Leaf", type=['jpg','png','jpeg'])
+        
+        if uploaded_file:
+            c1, c2 = st.columns([1,1])
+            img = Image.open(uploaded_file)
+            c1.image(img, caption="Specimen", use_container_width=True)
+            
+            if c2.button("Start Diagnosis", type="primary"):
+                ph1 = c2.empty()
+                ph2 = c2.empty()
+                heavy_duty_scan(ph1, ph2, img)
+                ph2.empty()
+                
+                result = predict_disease(img)
+                
+                if "error" in result:
+                    c2.error(result['error'])
+                else:
+                    pred_class = result['class']
+                    conf = result['confidence']
+                    clean_name = pred_class.replace("_", " ").lower()
+                    info = next((v for k, v in KNOWLEDGE_BASE.items() if clean_name in k.lower()), None)
                     
-                    if found_info:
-                        # Save History
-                        st.session_state.scan_history.append({
-                            "crop": current_section, "image": image, "disease_name": found_info['disease_name'],
-                            "confidence": confidence_val, "treatment": found_info['treatment'],
-                            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-                        })
-                        save_history(st.session_state.scan_history)  # <--- SAVE NEW SCAN IMMEDIATELY
+                    if info:
+                        c2.success(f"Result: {info['disease_name']}")
+                        c2.info(f"Confidence: {conf}")
+                        st.markdown(f"""
+                        <div style="background-color: {card_bg}; padding: 15px; border-radius: 10px; border-left: 5px solid #4CAF50;">
+                            <h4>Diagnosis</h4>
+                            <p>{info['description']}</p>
+                            <h4>Treatment</h4>
+                            <p>{info['treatment']}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.link_button("🛒 Buy Medicine", DARAZ_LINK)
+                        play_audio(info['disease_name'])
                         
-                        # [PLAY AUDIO]
-                        play_voice_feedback(found_info['disease_name'])
-
-                        with results_placeholder.container():
-                            st.toast("Match Found", icon="✅")
-                            st.markdown(f"""
-                            <div style="background-color: {card_bg}; padding: 20px; border-radius: 10px; border: 1px solid #4CAF50;">
-                                <h2 style="color: #4CAF50 !important; margin:0;">{found_info['disease_name']}</h2>
-                                <h4 style="color: {text_col} !important;">Confidence: {result['confidence']}</h4>
-                                <hr style="border-color: {border_col};">
-                                <p><strong>Diagnosis:</strong> {found_info['description']}</p>
-                                <p><strong>Treatment:</strong> {found_info['treatment']}</p>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            # [SPECIFIC DARAZ LINK]
-                            st.write("")
-                            st.link_button("🛒 Buy Medicine (Daraz.pk)", DARAZ_PRODUCT_LINK)
-
+                        # SAVE HISTORY
+                        user = st.session_state.user
+                        if user not in history_db: history_db[user] = []
+                        history_db[user].append({
+                            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                            "crop": current_crop,
+                            "disease": info['disease_name'],
+                            "treatment": info['treatment']
+                        })
+                        save_data(HISTORY_FILE, history_db)
                     else:
-                        st.warning(f"Detected: {prediction_key} (No DB Info)")
+                        c2.warning(f"Detected {pred_class}, but no medical info found.")
+
+        # [RESTORED] Future Crops Text
+        st.markdown("---")
+        st.markdown("""
+            <div style='text-align: center; color: gray; padding: 20px;'>
+                <h3>🚀 More crops coming soon...</h3>
+                <p>We are currently training models for Tomato, Grape, and Wheat.</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    # HISTORY PAGE
+    elif menu == "My History":
+        st.title("📜 Scan History")
+        user = st.session_state.user
+        user_history = history_db.get(user, [])
+        
+        # [RESTORED] Filters
+        col_f1, col_f2 = st.columns(2)
+        with col_f1: filter_crop = st.selectbox("Filter by Crop:", ["All", "Apple", "Corn", "Potato"])
+        with col_f2: 
+            use_date = st.toggle("Filter by Date")
+            filter_date = st.date_input("Select Date", datetime.date.today()) if use_date else None
+
+        if not user_history:
+            st.info("No scans found.")
+        else:
+            if st.button("🗑️ Clear History"):
+                history_db[user] = []
+                save_data(HISTORY_FILE, history_db)
+                st.rerun()
+            
+            # Filter Logic
+            display_items = []
+            for item in user_history:
+                if filter_crop != "All" and item['crop'] != filter_crop: continue
+                if filter_date and item['timestamp'].split(" ")[0] != str(filter_date): continue
+                display_items.append(item)
+
+            for item in reversed(display_items):
+                with st.container(border=True):
+                    c1, c2 = st.columns([3, 1])
+                    c1.subheader(item['disease'])
+                    c1.write(f"**Cure:** {item['treatment']}")
+                    c2.caption(f"{item['timestamp']}")
+                    c2.caption(f"Crop: {item['crop']}")
+
+    # SETTINGS PAGE
+    elif menu == "Settings":
+        st.title("⚙️ Settings")
+        st.checkbox("Dark Mode", value=st.session_state.dark_mode, key="dark_mode_toggle")
+        st.radio("Voice Language", ["English", "Urdu"], key="voice_lang")
+
+# --- 9. MASTER CONTROL ---
+if st.session_state.logged_in:
+    main_app()
+else:
+    login_screen()
