@@ -40,7 +40,6 @@ history_db = load_data(HISTORY_FILE, {})
 # --- 3. SESSION STATE ---
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'user' not in st.session_state: st.session_state.user = None
-# We need an internal page state for the Home/Predict flow
 if 'internal_page' not in st.session_state: st.session_state.internal_page = 'home'
 if 'selected_crop' not in st.session_state: st.session_state.selected_crop = None
 if 'dark_mode' not in st.session_state: st.session_state.dark_mode = True
@@ -179,12 +178,12 @@ def main_app():
         st.write(f"👤 **{st.session_state.user}**")
         if st.button("🚪 Logout"):
             st.session_state.logged_in = False
-            st.session_state.internal_page = 'home' # Reset on logout
+            st.session_state.internal_page = 'home'
             st.rerun()
         st.divider()
         
-        # [RESTORED] Emojis in Navigation
-        menu = st.radio("Navigation", ["🏠 Home", "📜 My History", "⚙️ Settings"])
+        # Navigation (Removed "Settings" from here)
+        menu = st.radio("Navigation", ["🏠 Home", "📜 My History"])
         
         st.divider()
         with st.expander("🌱 Tips for Gardening"):
@@ -204,10 +203,22 @@ def main_app():
             with open("app-release.apk", "rb") as f:
                 st.download_button("📥 Download APK", f, "LeafDoctor.apk", "application/vnd.android.package-archive")
 
+        # --- SETTINGS MOVED TO BOTTOM ---
+        st.divider()
+        st.subheader("⚙️ Settings")
+        
+        # FIXED THEME SWITCH
+        # We use a callback or direct check to ensure state updates immediately
+        is_dark = st.toggle("🌙 Dark Mode", value=st.session_state.dark_mode)
+        if is_dark != st.session_state.dark_mode:
+            st.session_state.dark_mode = is_dark
+            st.rerun()
+
+        st.session_state.voice_lang = st.radio("Voice Language:", ["English", "Urdu"], horizontal=True)
+
     # --- HOME TAB LOGIC ---
     if menu == "🏠 Home":
         
-        # A. CROP SELECTION SCREEN (The "Big Cards" View)
         if st.session_state.internal_page == 'home':
             st.title("🌿 Leaf Diagnostics")
             st.subheader("① Select Your Plant System")
@@ -215,12 +226,10 @@ def main_app():
             col1, col2, col3 = st.columns(3)
             crops = [("🍎", "Apple"), ("🌽", "Corn"), ("🥔", "Potato")]
             
-            # [RESTORED] Original Card Logic with HTML
             for idx, (emoji, name) in enumerate(crops):
                 with [col1, col2, col3][idx]:
                     with st.container(border=True):
                         st.markdown(f"<h1 style='text-align:center;'>{emoji}</h1><h3 style='text-align:center;'>{name}</h3>", unsafe_allow_html=True)
-                        # When clicked, update state to 'predict' so the view changes
                         if st.button(f"Select {name}", key=f"btn_{name}"):
                             go_predict(name)
                             st.rerun()
@@ -233,7 +242,6 @@ def main_app():
                 </div>
             """, unsafe_allow_html=True)
 
-        # B. PREDICTION SCREEN (Only shown after clicking a card)
         elif st.session_state.internal_page == 'predict':
             col_back, col_title = st.columns([1, 8])
             with col_back:
@@ -281,7 +289,6 @@ def main_app():
                             st.link_button("🛒 Buy Medicine (Daraz.pk)", DARAZ_LINK)
                             play_audio(info['disease_name'])
                             
-                            # Save History
                             user = st.session_state.user
                             if user not in history_db: history_db[user] = []
                             history_db[user].append({
@@ -327,12 +334,6 @@ def main_app():
                     c1.write(f"**Cure:** {item['treatment']}")
                     c2.caption(f"{item['timestamp']}")
                     c2.caption(f"Crop: {item['crop']}")
-
-    # --- SETTINGS TAB ---
-    elif menu == "⚙️ Settings":
-        st.title("⚙️ Settings")
-        st.checkbox("Dark Mode", value=st.session_state.dark_mode, key="dark_mode_toggle")
-        st.radio("Voice Language", ["English", "Urdu"], key="voice_lang")
 
 # --- 9. MASTER CONTROL ---
 if st.session_state.logged_in:
